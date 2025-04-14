@@ -72,3 +72,27 @@ from tensorflow.keras.layers import LSTM, Lambda, Layer, Dropout
 from deepctr.models import DeepFM
 from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
 `````
+
+### 2、AttributeError: module 'tensorflow.python.distribute.input_lib' has no attribute 'DistributedDatasetInterface'
+
+报错原因:
+`````
+这个错误是由于TensorFlow版本兼容性问题引起的。DistributedDatasetInterface在较新的TensorFlow版本中被移除或更名。
+`````
+解决方案:
+`````
+# 在导入keras前添加以下修复代码
+import tensorflow.python.keras.engine.data_adapter as data_adapter
+
+# 重写分布式数据集检查函数
+def _is_distributed_dataset_fixed(ds):
+    return False  # 直接返回False跳过检查
+
+# 应用猴子补丁
+data_adapter._is_distributed_dataset = _is_distributed_dataset_fixed
+
+# 然后继续你的原有代码
+import pandas as pd
+from deepctr.models import DeepFM
+...
+`````
