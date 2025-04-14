@@ -44,7 +44,6 @@ coverage/
 *.tfrecord
 
 # 图片、图表和可视化资源
-*.png
 *.jpg
 *.jpeg
 *.svg
