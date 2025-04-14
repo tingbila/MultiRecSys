@@ -42,7 +42,6 @@ coverage/
 *.npz
 *.npy
 *.tfrecord
-*.csv
 
 # 图片、图表和可视化资源
 *.png
