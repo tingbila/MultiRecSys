@@ -169,7 +169,9 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
         # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
         labels_finish = labels[:, 0]
         labels_like   = labels[:, 1]
-        return tf.data.Dataset.from_tensor_slices(((sparse_tensor, dense_tensor), (labels_finish, labels_like)))
+
+        return tf.data.Dataset.from_tensor_slices(((sparse_tensor, dense_tensor), {'finish': labels_finish,'like': labels_like}))
+        # return tf.data.Dataset.from_tensor_slices(((sparse_tensor, dense_tensor), (labels_finish, labels_like)))
 
     train_ds = df_to_dataset(train_data)
     valid_ds = df_to_dataset(valid_data)

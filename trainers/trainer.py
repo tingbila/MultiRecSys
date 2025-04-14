@@ -34,12 +34,12 @@ def train_and_evaluate(model, train_dataset, valid_dataset, test_dataset):
     )
 
     # 输出目录结构
-    base_dir = './outputs'
+    base_dir = r'./outputs'
     log_dir = os.path.join(base_dir, 'logs')
     callbacks_dir = os.path.join(base_dir, 'callbacks')
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(callbacks_dir, exist_ok=True)
-    output_model_file = os.path.join(callbacks_dir, 'best_model.keras')
+    output_model_file = os.path.join(callbacks_dir, 'best_model')
 
     callbacks = [
         keras.callbacks.EarlyStopping(
@@ -50,7 +50,8 @@ def train_and_evaluate(model, train_dataset, valid_dataset, test_dataset):
             monitor='val_loss',
             save_best_only=True,
             mode='min',
-            verbose=1
+            verbose=1,
+            save_format='tf'  # 显式指定格式
         )
     ]
 
