@@ -49,8 +49,8 @@ coverage/
 *.svg
 
 # 本地数据目录（如中间数据、结果输出）
-outputs/
-pkl_struct/
+outputs/*
+pkl_struct/*
 logs/
 callbacks/
 
