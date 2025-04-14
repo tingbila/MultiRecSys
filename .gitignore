@@ -54,7 +54,6 @@ outputs/
 pkl_struct/
 logs/
 callbacks/
-data_eda/
 
 # 忽略 Git LFS 自动追踪配置文件（可保留）
 *.gitattributes
