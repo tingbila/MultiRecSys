@@ -94,5 +94,4 @@ data_adapter._is_distributed_dataset = _is_distributed_dataset_fixed
 # 然后继续你的原有代码
 import pandas as pd
 from deepctr.models import DeepFM
-...
 `````
