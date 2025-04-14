@@ -67,4 +67,8 @@ from tensorflow.python.keras.layers import LSTM, Lambda, Layer, Dropout
 3. 修改为（使用公开 API）：
 from tensorflow.keras.layers import LSTM, Lambda, Layer, Dropout
 `````
-保存文件，然后再次运行你的程序。
+保存文件，然后再次运行你的程序进行验证，看是否报错：
+`````
+from deepctr.models import DeepFM
+from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
+`````
