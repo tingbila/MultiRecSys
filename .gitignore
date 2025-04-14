@@ -1,0 +1,61 @@
+# Python 缓存文件
+*.pyc
+__pycache__/
+
+# 操作系统相关文件
+.DS_Store
+*.bak
+*.log
+*.stats
+
+# IDE 配置文件（如 PyCharm、Eclipse 等）
+.idea/
+*.iml
+*.iws
+*.ipr
+.project
+.settings/
+.metadata/
+
+# 构建输出 & 安装依赖
+build/
+dist/
+*.egg-info/
+*.lock
+*.pid
+*.seed
+node_modules/
+lib-cov/
+coverage/
+.grunt
+
+# 忽略 Jupyter 输出等缓存
+.ipynb_checkpoints/
+
+# 模型与数据文件
+*.pkl
+*.h5
+*.ckpt
+*.pt
+*.pb
+*.onnx
+*.npz
+*.npy
+*.tfrecord
+*.csv
+
+# 图片、图表和可视化资源
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# 本地数据目录（如中间数据、结果输出）
+outputs/
+pkl_struct/
+logs/
+callbacks/
+data_eda/
+
+# 忽略 Git LFS 自动追踪配置文件（可保留）
+*.gitattributes
