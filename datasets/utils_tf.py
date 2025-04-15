@@ -135,8 +135,8 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel",
                     "finish", "like", "music_id", "device", "time", "duration_time"]
 
-    data = pd.read_csv(file_path, names=column_names)
-    # data = pd.read_csv(file_path, sep='\t', names=column_names)  # 大数据集
+    # data = pd.read_csv(file_path, names=column_names)
+    data = pd.read_csv(file_path, sep='\t', names=column_names)  # 大数据集
 
     # 区分数值特征和稀疏特征
     sparse_feats  = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
