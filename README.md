@@ -79,7 +79,7 @@ from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
 `````
 这个错误是由于TensorFlow版本兼容性问题引起的。DistributedDatasetInterface在较新的TensorFlow版本中被移除或更名。
 `````
-解决方案:
+解决方案1:
 `````
 # 在导入keras前添加以下修复代码
 import tensorflow.python.keras.engine.data_adapter as data_adapter
@@ -94,4 +94,27 @@ data_adapter._is_distributed_dataset = _is_distributed_dataset_fixed
 # 然后继续你的原有代码
 import pandas as pd
 from deepctr.models import DeepFM
+`````
+
+解决方案2:
+`````
+import tensorflow as tf
+
+# 修改原有的调用方式
+train_dataset = tf.data.Dataset.from_tensor_slices((
+    {name: train_data[name] for name in feature_names},
+    train_data[target].values
+)).batch(256).prefetch(1)
+
+val_dataset = tf.data.Dataset.from_tensor_slices((
+    {name: val_data[name] for name in feature_names},
+    val_data[target].values
+)).batch(256)
+
+history = model.fit(
+    train_dataset,  # 直接传入Dataset对象
+    epochs=10, 
+    verbose=2,
+    validation_data=val_dataset
+)
 `````
