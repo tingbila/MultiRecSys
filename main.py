@@ -24,6 +24,7 @@ from models.DeepCrossing_Residual import DeepCrossing_Residual
 from models.NFM import NFM
 from models.AFm import AFm
 from models.AFM_Embedding import AFM_Embedding
+from models.MMOE import MMOE
 
 
 
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     # model = DeepFM_MTL(feat_columns,embed_dim)
 
     # 5. 调用XDeepFM模型
-    model = XDeepFM_MTL(feat_columns,embed_dim,cin_layers=[7,15])
+    # model = XDeepFM_MTL(feat_columns,embed_dim,cin_layers=[7,15])
 
     # 6. 调用XDeepFM + Transform_Attention模型
     # finish_accuracy: 0.7333 - finish_auc: 0.8978 - finish_loss: 0.6232 - like_accuracy: 0.6000 - like_auc: 0.0000e+00 - like_loss: 0.6832 - loss: 1.3064
@@ -82,6 +83,11 @@ if __name__ == "__main__":
 
     # 11. 调用AFM_Embedding模型
     # model = AFM_Embedding(feat_columns,embed_dim)
+
+    # 12. 调用MMOE模型
+    # loss: 0.6485 - finish_loss: 0.6384 - like_loss: 0.0101 - finish_auc: 0.4112 - finish_accuracy: 0.6780 - like_auc: 0.0000e+00 - like_accuracy: 1.0000
+    model = MMOE(feat_columns=feat_columns, embed_dim=5)
+
 
     # 训练并评估
     train_and_evaluate(model, train_ds, valid_ds,test_ds)
