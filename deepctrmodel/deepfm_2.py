@@ -28,7 +28,7 @@ def load_data(file_path, column_names):
 # --- 2. 特征预处理 ---
 def preprocess_features(data, sparse_feats, dense_feats):
     # 填补缺失值
-    data[sparse_feats] = data[sparse_feats].fillna("missing")
+    data[sparse_feats] = data[sparse_feats].fillna("-1")
     data[dense_feats]  = data[dense_feats].fillna(0)
 
     # 编码稀疏特征
