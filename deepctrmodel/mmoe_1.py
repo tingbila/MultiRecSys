@@ -4,8 +4,6 @@
 # @Author : 张明阳
 # @Email : mingyang.zhang@ushow.media
 
-# This example shows how to use MMOE to solve a multi task learning problem. You can get the demo data census-income.sample and run the following codes.
-
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -34,16 +32,11 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
 from deepctr.models import MMOE
 
-
+# This example shows how to use MMOE to solve a multi task learning problem.
+# You can get the demo data census-income.sample and run the following codes.
+# https://deepctr-doc.readthedocs.io/en/latest/Examples.html
 
 if __name__ == "__main__":
-    import pandas as pd
-    from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import roc_auc_score
-    from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
-    from deepctr.models import MMOE
-
     # 1. 定义数据字段名称
     column_names = ['age', 'class_worker', 'det_ind_code', 'det_occ_code', 'education', 'wage_per_hour', 'hs_college',
                     'marital_stat', 'major_ind_code', 'major_occ_code', 'race', 'hisp_origin', 'sex', 'union_member',
