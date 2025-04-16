@@ -1,4 +1,4 @@
-## 1. 安装命令汇总
+## 1. 安装命令汇总-python必须3.8环境
  `````
 # 1. 清理环境
 pip uninstall tensorflow numpy protobuf pandas deepctr -y
