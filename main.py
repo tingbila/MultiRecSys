@@ -31,6 +31,14 @@ from models.MMOE import MMOE
 if __name__ == "__main__":
     # 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
     data, train_ds, valid_ds,test_ds, feat_columns = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
+
+    # 调用DeepFM模型
+    model = DeepFM_MTL(feat_columns,embed_dim)
+
+    # 训练并评估
+    train_and_evaluate(model, train_ds, valid_ds,test_ds)
+
+
     # data, train_ds, valid_ds, test_ds, feat_columns  = create_dataset(file_path="./final_track2_train.txt", embed_dim=embed_dim)
 
     # 打印整个 batch 数据（可根据实际需要调整显示内容）
@@ -86,7 +94,7 @@ if __name__ == "__main__":
 
     # 12. 调用MMOE模型
     # loss: 0.6485 - finish_loss: 0.6384 - like_loss: 0.0101 - finish_auc: 0.4112 - finish_accuracy: 0.6780 - like_auc: 0.0000e+00 - like_accuracy: 1.0000
-    model = MMOE(feat_columns=feat_columns, embed_dim=5)
+    # model = MMOE(feat_columns=feat_columns, embed_dim=5)
 
 
     # 训练并评估
