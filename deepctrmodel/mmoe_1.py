@@ -25,6 +25,16 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.image")
 
 import pandas as pd
+
+# 显示所有列
+pd.set_option('display.max_columns', None)
+
+# 显示所有行
+pd.set_option('display.max_rows', None)
+
+# 设置显示宽度（可选）
+pd.set_option('display.width', 1000)
+
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
@@ -112,3 +122,22 @@ if __name__ == "__main__":
 
     # test income AUC 0.2696
     # test marital AUC 0.8363
+
+    # 18. 可视化数据:可以自己选择数据进行可视化matplotlib绘画 ---
+    print(pd.DataFrame(history.history))
+    print(history.epoch)
+    plt.figure(figsize=(12, 5))
+
+
+#        loss  label_income_loss  label_marital_loss  label_income_binary_crossentropy  label_marital_binary_crossentropy  val_loss  val_label_income_loss  val_label_marital_loss  val_label_income_binary_crossentropy  val_label_marital_binary_crossentropy
+# 0  1.311852           0.633247            0.678605                          0.633247                           0.678605  1.253394               0.587825                0.665569                              0.587825                               0.665569
+# 1  1.262170           0.591361            0.670809                          0.591361                           0.670809  1.203463               0.546695                0.656768                              0.546695                               0.656768
+# 2  1.215557           0.552399            0.663159                          0.552399                           0.663159  1.156016               0.508086                0.647931                              0.508086                               0.647931
+# 3  1.170998           0.515558            0.655440                          0.515558                           0.655440  1.110823               0.471819                0.639003                              0.471819                               0.639003
+# 4  1.128389           0.480636            0.647753                          0.480636                           0.647753  1.068299               0.437658                0.630640                              0.437658                               0.630640
+# 5  1.088079           0.447723            0.640356                          0.447723                           0.640356  1.027738               0.405292                0.622446                              0.405292                               0.622446
+# 6  1.049889           0.416405            0.633484                          0.416405                           0.633484  0.989416               0.374809                0.614607                              0.374809                               0.614607
+# 7  1.013854           0.386796            0.627057                          0.386796                           0.627057  0.953882               0.346590                0.607292                              0.346590                               0.607292
+# 8  0.980380           0.359145            0.621235                          0.359145                           0.621235  0.920665               0.320408                0.600256                              0.320408                               0.600256
+# 9  0.949334           0.333360            0.615973                          0.333360                           0.615973  0.890479               0.296610                0.593868                              0.296610                               0.593868
+# [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
