@@ -4,7 +4,7 @@
 pip uninstall tensorflow numpy protobuf pandas deepctr -y
 pip cache purge
 
-# 2. 安装TF核心依赖 tensorflow必须是2.6.2 参考:https://github.com/shenweichen/DeepCTR/blob/master/docs/requirements.readthedocs.txt
+# 2. 安装TF核心依赖 tensorflow是2.6.2 参考:https://github.com/shenweichen/DeepCTR/blob/master/docs/requirements.readthedocs.txt
 pip install tensorflow==2.6.2 numpy==1.19.5 protobuf==3.17.3 h5py==3.1.0
 
 # 3. 安装DeepCTR
