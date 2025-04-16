@@ -4,43 +4,40 @@
 # @Author : 张明阳
 # @Email : mingyang.zhang@ushow.media
 
+# ========== 标准库 ==========
+import warnings
+
+# ========== 第三方库 ==========
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import log_loss, roc_auc_score
-from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
-from deepctr.models import DeepFM
-from tensorflow import keras
-import tensorflow.python.keras.engine.data_adapter as data_adapter
 import matplotlib
 matplotlib.use('TkAgg')  # 或者 'QtAgg'，看你电脑支持哪个
+import matplotlib.pyplot as plt
 
-# --- 修复 DeepCTR 与新版 TensorFlow 的数据适配器兼容性 ---
-def _is_distributed_dataset_fixed(ds):
-    return False
-
-data_adapter._is_distributed_dataset = _is_distributed_dataset_fixed
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.image")
-
-import pandas as pd
-
-# 显示所有列
-pd.set_option('display.max_columns', None)
-
-# 显示所有行
-pd.set_option('display.max_rows', None)
-
-# 设置显示宽度（可选）
-pd.set_option('display.width', 1000)
-
-from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from sklearn.metrics import log_loss, roc_auc_score
 
+from tensorflow import keras
+import tensorflow.python.keras.engine.data_adapter as data_adapter
+
+# ========== DeepCTR 模块 ==========
 from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names
-from deepctr.models import MMOE
+from deepctr.models import DeepFM, MMOE
+
+# ========== 设置选项 & 警告过滤 ==========
+# 设置 pandas 显示选项
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.width', 1000)
+
+# 忽略 matplotlib 的 UserWarning
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.image")
+
+# 修复 DeepCTR 与新版 TensorFlow 的兼容性问题
+def _is_distributed_dataset_fixed(ds):
+    return False
+data_adapter._is_distributed_dataset = _is_distributed_dataset_fixed
+
 
 # This example shows how to use MMOE to solve a multi task learning problem.
 # You can get the demo data census-income.sample and run the following codes.
