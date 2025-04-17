@@ -109,7 +109,7 @@ class DeepFM_MTL(Model):
         #  [-0.03806484  0.0479795   0.0132894  -0.03121579 -0.0166074   0.00733398
         #    0.00708617 -0.00899755  0.02732437 -0.00605234 -0.02896208  0.02931662
         #    0.0044607   0.03854013  0.04758653]], shape=(2, 15), dtype=float32)
-        dnn_input = tf.concat([dense_inputs, flatten_embeddings], axis=1)
+        dnn_input = tf.concat([dense_inputs, flatten_embeddings], axis=1) # shape=(2, 15) + shape=(2, 2) => shape=(2, 17)
         dnn_output = self.dnn(dnn_input, training=training)
 
         logits = first_order_output + second_order + dnn_output
