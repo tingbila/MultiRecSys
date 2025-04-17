@@ -75,7 +75,7 @@ class DeepFM_MTL(Model):
 
         # 第二部分：FM部分
         embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
-        # print(embeddings)
+        # print(embeddings) shape: (batch_size=2, field_num=3, embedding_dim=5)
         # Tensor("stack:0", shape=(2, 3, 5), dtype=float32)
         # tf.Tensor(
         # [[[-0.0292243   0.03134212 -0.00664638  0.0308771   0.03662998]
@@ -86,9 +86,14 @@ class DeepFM_MTL(Model):
         #   [-0.03824542  0.00229248  0.00047214  0.0488669  -0.04776417]
         #   [-0.01696395 -0.00136379  0.04921383  0.04019973 -0.00026955]]], shape=(2, 3, 5), dtype=float32)
 
+        # 这一步对每个样本的所有 sparse embedding 向量在特征维度上求和：对于某个样本，就是把它的三个特征的 embedding 向量相加，变成一个总的表示
+        # (2, 3, 5) → [2, 5]
         summed = tf.reduce_sum(embeddings, axis=1)
+        # (2, 5) → [2, 5]
         squared_sum = tf.square(summed)
+        # 先对每个 embedding 向量做逐元素平方，然后再对所有 sparse 特征做求和 (2, 3, 5) → [2, 5]
         squared = tf.reduce_sum(tf.square(embeddings), axis=1)
+        # [2, 1]，表示每个样本的二阶交叉值（标量）
         second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1, keepdims=True)
         # print(second_order)
         # [[0.00537243]
