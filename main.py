@@ -32,7 +32,7 @@ from models.DeepFM_Sequence_MTL import DeepFM_Sequence_MTL
 
 if __name__ == "__main__":
     # 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
-    data, train_ds, valid_ds,test_ds, feat_columns, sequence_metadata = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
+    data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
     # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 打印整个 batch 数据（可根据实际需要调整显示内容）
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # model = WideAndDeep(feat_columns,embed_dim)
 
     # 4. 调用DeepFM模型
-    model = DeepFM_MTL(feat_columns,embed_dim,sequence_metadata)
+    model = DeepFM_MTL(feat_columns,embed_dim)
     print(model)
 
     # 5. 调用XDeepFM模型

@@ -118,7 +118,21 @@ def process_sparse_feats(data, feats):
 
 def process_sequence_feats(data, sequence_feats):
     pad_sequences_dict = {}  # 用于存储每个变长特征处理后的 padding 序列
-    tokenizers = {}          # 每个变长特征对应一个独立的   Tokenizer，用于后续文本转索引
+    # {'genres': array([[2, 3, 0, 0, 0, 0],
+    #                   [4, 5, 0, 0, 0, 0],
+    #                   [3, 6, 0, 0, 0, 0],
+    #                   ...,
+    #                   [2, 6, 0, 0, 0, 0],
+    #                   [4, 9, 5, 0, 0, 0],
+    #                   [2, 0, 0, 0, 0, 0]]),
+    #  'genres_bak': array([[2, 3, 0, 0, 0, 0],
+    #                       [4, 5, 0, 0, 0, 0],
+    #                       [3, 6, 0, 0, 0, 0],
+    #                       ...,
+    #                       [2, 6, 0, 0, 0, 0],
+    #                       [4, 9, 5, 0, 0, 0],
+    #                       [2, 0, 0, 0, 0, 0]])}
+    tokenizers = {}          # 每个变长特征对应一个独立的 Tokenizer，用于后续文本转索引
     pad_len_dict = {}        # 用于记录每个变长特征的 padding 长度（即序列被填充后的最大长度）
 
     # 遍历所有变长序列特征
@@ -133,11 +147,10 @@ def process_sequence_feats(data, sequence_feats):
         # data[feature] = list(padded):
         # 把 NumPy 的二维数组 padded 每一行变成一个 list，然后整体作为一个新的列表赋值给 data[feature]，从而更新 DataFrame 的某一列，
         # 每个元素是一个 list（而不是一个 ndarray）
-
         tokenizers[feature] = tokenizer
-        pad_len_dict[feature] = padded.shape[1]
+        # pad_len_dict[feature] = padded.shape[1]  # 但是这个字段在后续没有用到
 
-    return data, tokenizers,pad_len_dict
+    return data, tokenizers
 
 
 # 创建数据集，处理特征并返回处理后的数据和特征信息
@@ -169,7 +182,7 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)
     data = process_sparse_feats(data, sparse_feats)
-    data, tokenizers,pad_len_dict = process_sequence_feats(data, sequence_feats)
+    data, tokenizers =  process_sequence_feats(data, sequence_feats)
     # print(data)
     # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
     # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
@@ -210,4 +223,4 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     valid_ds = valid_ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     test_ds  = test_ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-    return data, train_ds, valid_ds,test_ds, feat_columns,{"tokenizers":tokenizers,"pad_len_dict":pad_len_dict}
+    return data, train_ds, valid_ds,test_ds, feat_columns

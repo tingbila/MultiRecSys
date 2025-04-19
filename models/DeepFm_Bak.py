@@ -18,7 +18,7 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 
 
 class DeepFM_MTL(Model):
-    def __init__(self, feat_columns, emb_size,sequence_metadata=None):
+    def __init__(self, feat_columns, emb_size):
         """
         :param feat_columns:
         :param emb_size:
@@ -42,7 +42,7 @@ class DeepFM_MTL(Model):
 
         # Sequence embedding layers
         self.seq_embeds = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)  for feat in self.seq_feats
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size, mask_zero=True)  for feat in self.seq_feats
         ]
 
         # DNN layers
