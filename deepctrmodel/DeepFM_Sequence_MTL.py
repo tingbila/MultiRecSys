@@ -110,18 +110,18 @@ if __name__ == '__main__':
 
     dense_feats = ['I1', 'I2']
     sparse_feats = ['C1', 'C2', 'C3']
-    sequence_feats = ['user_history', 'user_history_bak']
+    sequence_feats = ['S1', 'S2']
 
     feat_columns = [
         [{'feat': 'I1'}, {'feat': 'I2'}],
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
-        [{'feat': 'user_history', 'feat_num': 20}, {'feat': 'user_history_bak', 'feat_num': 20}]
+        [{'feat': 'S1', 'feat_num': 20}, {'feat': 'S2', 'feat_num': 20}]
     ]
 
     model = DeepFM_Sequence_MTL(feat_columns=feat_columns, emb_size=5)
 
-    user_history = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
-    user_history_bak = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
+    S1 = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
+    S2 = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
 
     sequence_inputs = {}
     for feat in sequence_feats:
