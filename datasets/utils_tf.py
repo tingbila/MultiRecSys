@@ -117,39 +117,22 @@ def process_sparse_feats(data, feats):
 
 
 def process_sequence_feats(data, sequence_feats):
-    pad_sequences_dict = {}  # 用于存储每个变长特征处理后的 padding 序列
-    # {'genres': array([[2, 3, 0, 0, 0, 0],
-    #                   [4, 5, 0, 0, 0, 0],
-    #                   [3, 6, 0, 0, 0, 0],
-    #                   ...,
-    #                   [2, 6, 0, 0, 0, 0],
-    #                   [4, 9, 5, 0, 0, 0],
-    #                   [2, 0, 0, 0, 0, 0]]),
-    #  'genres_bak': array([[2, 3, 0, 0, 0, 0],
-    #                       [4, 5, 0, 0, 0, 0],
-    #                       [3, 6, 0, 0, 0, 0],
-    #                       ...,
-    #                       [2, 6, 0, 0, 0, 0],
-    #                       [4, 9, 5, 0, 0, 0],
-    #                       [2, 0, 0, 0, 0, 0]])}
     tokenizers = {}          # 每个变长特征对应一个独立的 Tokenizer，用于后续文本转索引
-    pad_len_dict = {}        # 用于记录每个变长特征的 padding 长度（即序列被填充后的最大长度）
-
     # 遍历所有变长序列特征
     for feature in sequence_feats:
-        # 将 '|' 分隔转为空格，适配 Tokenizer 格式
-        texts = data[feature].fillna('').apply(lambda x: x.replace(',', ' ')).tolist()
+        # 将 '|' 分隔转为空格，适配 Tokenizer 格式， Tokenizer 默认是按 空格（whitespace）分割输入文本的
+        texts = data[feature].fillna('').apply(lambda x: x.replace(',', ' ')).tolist()   # ['action comedy', 'drama', '', 'thriller horror']
         tokenizer = Tokenizer(oov_token='OOV')
         tokenizer.fit_on_texts(texts)
         sequences = tokenizer.texts_to_sequences(texts)
-        padded = pad_sequences(sequences, padding='post')  # shape: (num_samples, max_seq_len)
-        data[feature] = list(padded)
-        # data[feature] = list(padded):
         # 把 NumPy 的二维数组 padded 每一行变成一个 list，然后整体作为一个新的列表赋值给 data[feature]，从而更新 DataFrame 的某一列，
         # 每个元素是一个 list（而不是一个 ndarray）
+        data[feature] = list(pad_sequences(sequences, padding='post'))    # shape: (num_samples, max_seq_len)
+        # 130  136         57       60         16         54        0       0     0         0      71  0.475954       1.437616  [2, 0]   [11, 6]
+        # 131  249         33       21        168         12        0       1     0        50     223  0.507134      -0.392077  [4, 6]    [9, 8]
         tokenizers[feature] = tokenizer
-        # pad_len_dict[feature] = padded.shape[1]  # 但是这个字段在后续没有用到
 
+    # 对于离散pad数据，某一行元素就是[2, 3, 0, 0, 0, 0]这种格式
     return data, tokenizers
 
 
@@ -198,6 +181,9 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     #  [{'feat': 'uid', 'feat_num': 289},....,{'feat': 'author_id', 'feat_num': 289}],
     #  [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]]
 
+    # print(data) 在data上面进行切分数据
+    # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
+    # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
     train_data, test_data  = train_test_split(data,       test_size=test_size, random_state=42)
     train_data, valid_data = train_test_split(train_data, test_size=test_size, random_state=42)
 
@@ -206,13 +192,17 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
         sparse_tensor = tf.convert_to_tensor(df[sparse_feats].values, dtype=tf.int32)
         dense_tensor = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
         # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
-        sequence_tensors = [tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)  for feat in sequence_feats]
+        sequence_tensors = []
+        for feat in sequence_feats:
+            tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
+            sequence_tensors.append(tensor)
 
         labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
         # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
         labels_finish = labels[:, 0]
         labels_like   = labels[:, 1]
 
+        # *sequence_tensors 相当于传入sequence_tensors[0]、sequence_tensors[1].....
         return tf.data.Dataset.from_tensor_slices(((sparse_tensor, dense_tensor, *sequence_tensors), {'finish': labels_finish, 'like': labels_like}))
 
     train_ds = df_to_dataset(train_data)

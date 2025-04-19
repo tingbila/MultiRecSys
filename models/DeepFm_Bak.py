@@ -66,7 +66,7 @@ class DeepFM_MTL(Model):
     def call(self, inputs, training=False):
         sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
         dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
-        seq_inputs    = inputs[2:]  # list of tensors, each shape: (batch_size, max_seq_len)
+        seq_inputs    = inputs[2:]  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
