@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # model = Fm(feat_columns,embed_dim)
 
     # 2. 调用FM模型-Embedding版本
-    # model = FM_MTL(feat_columns,embed_dim)
+    model = FM_MTL(feat_columns,embed_dim)
 
     # 3. 调用Wide&Deep模型
     # model = WideAndDeep(feat_columns,embed_dim)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # model = DeepFM_MTL(feat_columns,embed_dim)
 
     # 5. 调用XDeepFM模型
-    model = XDeepFM_MTL(feat_columns,embed_dim)
+    # model = XDeepFM_MTL(feat_columns,embed_dim)
 
     # 6. 调用XDeepFM + Transform_Attention模型
     # finish_accuracy: 0.7333 - finish_auc: 0.8978 - finish_loss: 0.6232 - like_accuracy: 0.6000 - like_auc: 0.0000e+00 - like_loss: 0.6832 - loss: 1.3064

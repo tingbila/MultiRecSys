@@ -17,20 +17,23 @@ from config.data_config import *
 class FM_MTL(Model):
     def __init__(self, feat_columns, emb_size):
         super().__init__()
+        # feat_columns = [
+        #     [{'feat': 'I1'}, {'feat': 'I2'}],
+        #     [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
+        # ]
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
-        self.dense_size = len(self.dense_feats)
+        
         self.emb_size = emb_size
-
+        
+        # Linear
         self.linear_dense = layers.Dense(1)
-
-        self.first_order_sparse_emb = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=1)
-            for feat in self.sparse_feats
+        self.linear_sparse_embeds = [
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=1)         for feat in self.sparse_feats
         ]
 
-        self.second_order_sparse_emb = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)
-            for feat in self.sparse_feats
+        # FM embedding
+        self.fm_sparse_embeds = [
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)  for feat in self.sparse_feats
         ]
 
 
@@ -41,7 +44,8 @@ class FM_MTL(Model):
 
 
     def call(self, inputs, training=False):
-        sparse_inputs, dense_inputs = inputs
+        sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
+        dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
@@ -50,9 +54,8 @@ class FM_MTL(Model):
         #  [3 2 3]]
 
         # 第一部分：线性部分
-        linear_dense_out = self.linear_dense(dense_inputs)
-        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.first_order_sparse_emb)],
-                                      axis=1)
+        linear_dense_out  = self.linear_dense(dense_inputs)
+        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.linear_sparse_embeds)],axis=1)
         # print("--------------1-----------")
         # print(linear_sparse_out)
         # [[ 0.01539519 -0.04832922 -0.02953873]
@@ -65,8 +68,8 @@ class FM_MTL(Model):
         #  [0.6256093 ]]
 
         # 第二部分：FM部分
-        embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
-        # print(embeddings)
+        sparse_embeds = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.fm_sparse_embeds)], axis=1)
+        # print(sparse_embeds) shape: (batch_size=2, field_num=3, embedding_dim=5)
         # Tensor("stack:0", shape=(2, 3, 5), dtype=float32)
         # tf.Tensor(
         # [[[-0.0292243   0.03134212 -0.00664638  0.0308771   0.03662998]
@@ -77,15 +80,21 @@ class FM_MTL(Model):
         #   [-0.03824542  0.00229248  0.00047214  0.0488669  -0.04776417]
         #   [-0.01696395 -0.00136379  0.04921383  0.04019973 -0.00026955]]], shape=(2, 3, 5), dtype=float32)
 
-        summed = tf.reduce_sum(embeddings, axis=1)
+        fm_input = sparse_embeds
+        # 这一步对每个样本的所有 sparse embedding 向量在特征维度上求和：对于某个样本，就是把它的三个特征的 embedding 向量相加，变成一个总的表示
+        # (2, 3, 5) → [2, 5]
+        summed = tf.reduce_sum(fm_input, axis=1)
+        # (2, 5) → [2, 5]
         squared_sum = tf.square(summed)
-        squared = tf.reduce_sum(tf.square(embeddings), axis=1)
+        # 先对每个 embedding 向量做逐元素平方，然后再对所有 sparse 特征做求和 (2, 3, 5) → [2, 5]
+        squared = tf.reduce_sum(tf.square(fm_input), axis=1)
+        # [2, 1]，表示每个样本的二阶交叉值（标量）
         second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1, keepdims=True)
         # print(second_order)
         # [[0.00537243]
         #  [0.00075581]]
 
-
+        # 合成最终输出
         logits = first_order_output + second_order
 
         # 分支输出
@@ -97,50 +106,42 @@ class FM_MTL(Model):
 
 
 if __name__ == '__main__':
-    # 假设有 2 个 dense 特征，3 个 sparse 特征
+    # 1. 不使用序列特征
     dense_feats = ['I1', 'I2']
     sparse_feats = ['C1', 'C2', 'C3']
-
-    # 每个 sparse 特征的唯一值个数分别为 10, 8, 6
     feat_columns = [
         [{'feat': 'I1'}, {'feat': 'I2'}],
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
     ]
 
-    # 初始化模型
     model = FM_MTL(feat_columns=feat_columns, emb_size=5)
-
-    # 模拟 batch size 为 3 的输入
-    batch_size = 3
-    dense_input = tf.random.uniform(shape=(batch_size, len(dense_feats)), dtype=tf.float32)
-    sparse_input = tf.random.uniform(shape=(batch_size, len(sparse_feats)), maxval=6, dtype=tf.int32)
-
-    # 前向传播
+    sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+    dense_input = np.random.random((3, len(dense_feats)))
     output = model((sparse_input, dense_input), training=False)
 
-    # 打印结果
     print("Dense 输入:")
-    print(dense_input.numpy())
+    print(dense_input)
     print("Sparse 输入:")
-    print(sparse_input.numpy())
+    print(sparse_input)
     print("\n模型输出:")
     print(output)
+    model.summary()
 
 
-    # Dense 输入:
-    # [[0.19882536 0.9919691 ]
-    #  [0.14089882 0.6178216 ]
-    #  [0.59311116 0.79255974]]
-    # Sparse 输入:
-    # [[1 3 3]
-    #  [4 4 0]
-    #  [1 3 2]]
-    #
-    # 模型输出:
-    # (<tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.47370112],
-    #        [0.4806958 ],
-    #        [0.4883328 ]], dtype=float32)>, <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.43123466],
-    #        [0.4493978 ],
-    #        [0.4693598 ]], dtype=float32)>)
+# Dense 输入:
+# [[0.29898568 0.37788569]
+#  [0.30009296 0.51782235]
+#  [0.06622059 0.74233538]]
+# Sparse 输入:
+# [[1 2 3]
+#  [4 5 5]
+#  [1 2 3]]
+#
+# 模型输出:
+# {'finish': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.5775809 ],
+#        [0.6161572 ],
+#        [0.75753856]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.46416104],
+#        [0.4459036 ],
+#        [0.37216955]], dtype=float32)>}

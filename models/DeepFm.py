@@ -22,9 +22,12 @@ class DeepFM_MTL(Model):
         """
         :param feat_columns:
         :param emb_size:
-        :param sequence_metadata: {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
         """
         super().__init__()
+        # feat_columns = [
+        #     [{'feat': 'I1'}, {'feat': 'I2'}],
+        #     [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
+        # ]
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
         self.seq_feats = feat_columns[2] if len(feat_columns) > 2 else []
 
@@ -186,6 +189,7 @@ if __name__ == '__main__':
         print(sparse_input)
         print("\n模型输出:")
         print(output)
+        model.summary()
     else:
     # 2. 使用序列特征
         dense_feats = ['I1', 'I2']
@@ -225,7 +229,7 @@ if __name__ == '__main__':
         print("\n模型输出:")
         print(output)
 
-    model.summary()
+        model.summary()
 
 
 
