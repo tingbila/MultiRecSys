@@ -44,9 +44,7 @@ class DeepFM_MTL(Model):
         # Sequence embedding layers
         # 仅当存在序列特征时才构造 seq embedding 层
         if self.seq_feats:
-            self.seq_embeds = [
-                layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size, mask_zero=True) for feat in self.seq_feats
-            ]
+            self.seq_embeds = [layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size, mask_zero=True) for feat in self.seq_feats]
 
         # DNN layers
         self.dnn = tf.keras.Sequential([
@@ -99,7 +97,7 @@ class DeepFM_MTL(Model):
 
         # 第二部分：FM部分 (Second Order)
         sparse_embeds = tf.stack([emb(sparse_inputs[:, i])   for i, emb in enumerate(self.fm_sparse_embeds)],axis=1)  # shape: (batch_size, num_sparse_fields, emb_dim)
-        # print(embeddings) shape: (batch_size=2, field_num=3, embedding_dim=5)
+        # print(sparse_embeds) shape: (batch_size=2, field_num=3, embedding_dim=5)
         # Tensor("stack:0", shape=(2, 3, 5), dtype=float32)
         # tf.Tensor(
         # [[[-0.0292243   0.03134212 -0.00664638  0.0308771   0.03662998]
@@ -154,6 +152,7 @@ class DeepFM_MTL(Model):
             dnn_input = tf.concat([dense_inputs, sparse_flatten_embeddings], axis=1)
         dnn_output = self.dnn(dnn_input, training=training)
 
+        # 合成最终输出
         logits = first_order_output + second_order + dnn_output
 
         # 分支输出
@@ -226,12 +225,14 @@ if __name__ == '__main__':
         print("\n模型输出:")
         print(output)
 
+    model.summary()
+
 
 
 # Dense 输入:
-# [[0.28087478 0.97186311]
-#  [0.421542   0.69756784]
-#  [0.87356256 0.36750447]]
+# [[0.42735437 0.1205228 ]
+#  [0.3352796  0.72378077]
+#  [0.35812327 0.34702339]]
 # Sparse 输入:
 # [[1 2 3]
 #  [4 5 5]
@@ -247,9 +248,41 @@ if __name__ == '__main__':
 #
 # 模型输出:
 # {'finish': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-# array([[0.7947198 ],
-#        [0.64890695],
-#        [0.40848154]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-# array([[0.7677494 ],
-#        [0.63240683],
-#        [0.41896144]], dtype=float32)>}
+# array([[0.5794624 ],
+#        [0.46379182],
+#        [0.52200294]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.6530806],
+#        [0.4289063],
+#        [0.5433398]], dtype=float32)>}
+# Model: "deep_fm_mtl"
+# _________________________________________________________________
+# Layer (type)                 Output Shape              Param #
+# =================================================================
+# dense (Dense)                multiple                  3
+# _________________________________________________________________
+# embedding (Embedding)        multiple                  10
+# _________________________________________________________________
+# embedding_1 (Embedding)      multiple                  8
+# _________________________________________________________________
+# embedding_2 (Embedding)      multiple                  6
+# _________________________________________________________________
+# embedding_3 (Embedding)      multiple                  50
+# _________________________________________________________________
+# embedding_4 (Embedding)      multiple                  40
+# _________________________________________________________________
+# embedding_5 (Embedding)      multiple                  30
+# _________________________________________________________________
+# embedding_6 (Embedding)      multiple                  50
+# _________________________________________________________________
+# embedding_7 (Embedding)      multiple                  100
+# _________________________________________________________________
+# sequential (Sequential)      (3, 1)                    86201
+# _________________________________________________________________
+# finish (Dense)               multiple                  2
+# _________________________________________________________________
+# like (Dense)                 multiple                  2
+# =================================================================
+# Total params: 86,502
+# Trainable params: 86,502
+# Non-trainable params: 0
+# _________________________________________________________________
