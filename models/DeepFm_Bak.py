@@ -13,6 +13,9 @@ import tensorflow as tf
 import numpy as np
 from config.data_config import *
 
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
+
 
 class DeepFM_MTL(Model):
     def __init__(self, feat_columns, emb_size,sequence_metadata=None):
@@ -22,28 +25,27 @@ class DeepFM_MTL(Model):
         :param sequence_metadata: {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
         """
         super().__init__()
-        self.dense_feats, self.sparse_feats, self.sequence_feats = feat_columns[0], feat_columns[1],feat_columns[2]
-        self.dense_size = len(self.dense_feats)
+        self.dense_feats, self.sparse_feats, self.seq_feats = feat_columns[0], feat_columns[1],feat_columns[2]
         self.emb_size = emb_size
 
+        # Linear
         self.linear_dense = layers.Dense(1)
-
-        self.first_order_sparse_emb = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=1)
-            for feat in self.sparse_feats
+        self.linear_sparse_embeds = [
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=1)         for feat in self.sparse_feats
         ]
 
-        self.second_order_sparse_emb = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)
-            for feat in self.sparse_feats
+        # FM embedding
+        self.fm_sparse_embeds = [
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)  for feat in self.sparse_feats
         ]
 
-        # 增加序列离散数据的Embedding-V矩阵
-        self.sequence_emb_layers  = [
-            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)
-            for feat in self.sequence_feats
+
+        # Sequence embedding layers
+        self.seq_embeds = [
+            layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)  for feat in self.seq_feats
         ]
 
+        # DNN layers
         self.dnn = tf.keras.Sequential([
             layers.Dense(200, activation='relu'),
             layers.Dropout(0.3),
@@ -54,6 +56,7 @@ class DeepFM_MTL(Model):
             layers.Dense(1)
         ])
 
+        # Task-specific outputs
         # 每个任务一个输出层
         self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
         self.like_output_layer   = tf.keras.layers.Dense(1, activation='sigmoid', name='like')
@@ -61,20 +64,25 @@ class DeepFM_MTL(Model):
 
 
     def call(self, inputs, training=False):
-        sparse_inputs   = inputs[0]   # shape: (batch_size, num_sparse)
-        dense_inputs    = inputs[1]   # shape: (batch_size, num_dense)
-        sequence_inputs = inputs[2:]  # list of tensors, each shape: (batch_size, max_seq_len)
+        sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
+        dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
+        seq_inputs    = inputs[2:]  # list of tensors, each shape: (batch_size, max_seq_len)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
         # Sparse 输入:
         # [[5 4 1]
         #  [3 2 3]]
+        # seq_inputs 输入:
+        # [array([[2, 3, 4],
+        #         [3, 5, 0],
+        #         [2, 4, 6]]), array([[2, 3],
+        #                             [3, 4],
+        #                             [2, 5]])]
 
         # 第一部分：线性部分
-        linear_dense_out = self.linear_dense(dense_inputs)
-        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.first_order_sparse_emb)],
-                                      axis=1)
+        linear_dense_out  = self.linear_dense(dense_inputs)
+        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.linear_sparse_embeds)],axis=1)
         # print("--------------1-----------")
         # print(linear_sparse_out)
         # [[ 0.01539519 -0.04832922 -0.02953873]
@@ -86,8 +94,8 @@ class DeepFM_MTL(Model):
         # [[0.22632796]
         #  [0.6256093 ]]
 
-        # 第二部分：FM部分
-        embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
+        # 第二部分：FM部分 (Second Order)
+        sparse_embeds = tf.stack([emb(sparse_inputs[:, i])   for i, emb in enumerate(self.fm_sparse_embeds)],axis=1)  # shape: (batch_size, num_sparse_fields, emb_dim)
         # print(embeddings) shape: (batch_size=2, field_num=3, embedding_dim=5)
         # Tensor("stack:0", shape=(2, 3, 5), dtype=float32)
         # tf.Tensor(
@@ -100,36 +108,23 @@ class DeepFM_MTL(Model):
         #   [-0.01696395 -0.00136379  0.04921383  0.04019973 -0.00026955]]], shape=(2, 3, 5), dtype=float32)
 
         # ---------- 序列特征部分 ----------
-        sequence_embeds = []
-        for i, (seq_input, seq_emb_layer) in enumerate(zip(sequence_inputs, self.sequence_emb_layers)):
-            seq_embed = seq_emb_layer(seq_input)                            # (batch_size, seq_len, embedding_dim)
-            pooled_embed = tf.reduce_mean(seq_embed, axis=1,keepdims=True)  # shape: (batch_size, 1, embedding_dim) 从这可以看出边长序列的字段数据最终整体也是当成一个字段处理
-            sequence_embeds.append(pooled_embed)
-
+        seq_embeds = []
+        for i, (seq_input, seq_layer) in enumerate(zip(seq_inputs, self.seq_embeds)):
+            seq_emb = seq_layer(seq_input)  # (batch_size, seq_len, emb_dim)
+            pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)  # (batch_size, 1, emb_dim)  从这可以看出边长序列的字段数据最终整体也是当成一个字段处理
+            seq_embeds.append(pooled)
         # 拼接所有嵌入特征
-        merged_sequence_embeds = tf.concat(sequence_embeds, axis=1)        # shape: (batch_size, num_fields, embedding_dim)
+        seq_embeds_concat = tf.concat(seq_embeds, axis=1)  # (batch_size, num_seq_fields, emb_dim)
 
-        # ---------- 序列特征部分 ----------
-        sequence_embeds = []
-        for i, (seq_input, seq_emb_layer) in enumerate(zip(sequence_inputs, self.sequence_emb_layers)):
-            seq_embed = seq_emb_layer(seq_input)                            # (batch_size, seq_len, embedding_dim)
-            pooled_embed = tf.reduce_mean(seq_embed, axis=1,keepdims=True)  # shape: (batch_size, 1, embedding_dim) 从这可以看出边长序列的字段数据最终整体也是当成一个字段处理
-            sequence_embeds.append(pooled_embed)
-
-        # 拼接所有嵌入特征
-        merged_sequence_embeds = tf.concat(sequence_embeds, axis=1)        # shape: (batch_size, num_fields, embedding_dim)
-
-        combined_embeddings = tf.concat([embeddings, merged_sequence_embeds], axis=1)
-        # shape: (batch_size, num_sparse_fields + num_sequence_fields, embedding_dim)
-
-
+        # sparse和seq_sparse进行拼接
+        fm_input = tf.concat([sparse_embeds, seq_embeds_concat], axis=1)  # (batch, num_sparse_fields + num_seq_fields, emb_dim)
         # 这一步对每个样本的所有 sparse embedding 向量在特征维度上求和：对于某个样本，就是把它的三个特征的 embedding 向量相加，变成一个总的表示
         # (2, 3, 5) → [2, 5]
-        summed = tf.reduce_sum(combined_embeddings, axis=1)
+        summed = tf.reduce_sum(fm_input, axis=1)
         # (2, 5) → [2, 5]
         squared_sum = tf.square(summed)
         # 先对每个 embedding 向量做逐元素平方，然后再对所有 sparse 特征做求和 (2, 3, 5) → [2, 5]
-        squared = tf.reduce_sum(tf.square(embeddings), axis=1)
+        squared = tf.reduce_sum(tf.square(fm_input), axis=1)
         # [2, 1]，表示每个样本的二阶交叉值（标量）
         second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1, keepdims=True)
         # print(second_order)
@@ -137,7 +132,7 @@ class DeepFM_MTL(Model):
         #  [0.00075581]]
 
         # 第三部分：DNN 部分
-        flatten_embeddings = tf.reshape(embeddings, shape=(-1, len(self.sparse_feats) * self.emb_size))
+        sparse_flatten_embeddings = tf.reshape(sparse_embeds, shape=(-1, len(self.sparse_feats) * self.emb_size))
         # print(flatten_embeddings)
         # Tensor("Reshape:0", shape=(2, 15), dtype=float32)
         # tf.Tensor(
@@ -146,11 +141,9 @@ class DeepFM_MTL(Model):
         #  [-0.03806484  0.0479795   0.0132894  -0.03121579 -0.0166074   0.00733398
         #    0.00708617 -0.00899755  0.02732437 -0.00605234 -0.02896208  0.02931662
         #    0.0044607   0.03854013  0.04758653]], shape=(2, 15), dtype=float32)
+        seq_flat = tf.reshape(seq_embeds_concat, shape=(-1, seq_embeds_concat.shape[1] * self.emb_size))  # shape: (batch_size, num_fields * embedding_dim)
 
-
-        flatten_merged_sequence_embeds = tf.reshape(merged_sequence_embeds, shape=(-1, merged_sequence_embeds.shape[1] * self.emb_size))  # shape: (batch_size, num_fields * embedding_dim)
-
-        dnn_input = tf.concat([dense_inputs, flatten_embeddings,flatten_merged_sequence_embeds], axis=1) # shape=(2, 15) + shape=(2, 2) => shape=(2, 17)
+        dnn_input = tf.concat([dense_inputs, sparse_flatten_embeddings, seq_flat], axis=1)                # shape=(2, 15) + shape=(2, 2) + shape=(2, X)  => shape=(2, 17)
         dnn_output = self.dnn(dnn_input, training=training)
 
         logits = first_order_output + second_order + dnn_output
@@ -167,48 +160,81 @@ if __name__ == '__main__':
     # 假设有 2 个 dense 特征，3 个 sparse 特征
     dense_feats = ['I1', 'I2']
     sparse_feats = ['C1', 'C2', 'C3']
+    sequence_feats = ['S1', 'S2']
 
     # 每个 sparse 特征的唯一值个数分别为 10, 8, 6
     feat_columns = [
         [{'feat': 'I1'}, {'feat': 'I2'}],
-        [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
+        [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
+        [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}]
     ]
 
     # 初始化模型
     model = DeepFM_MTL(feat_columns=feat_columns, emb_size=5)
 
-    # 模拟 batch size 为 3 的输入
-    batch_size = 3
-    dense_input = tf.random.uniform(shape=(batch_size, len(dense_feats)), dtype=tf.float32)
-    sparse_input = tf.random.uniform(shape=(batch_size, len(sparse_feats)), maxval=6, dtype=tf.int32)
+    sequence_inputs = {}
+    tokenizers = {}
+    # 模拟 sequence 特征数据
+    S1 = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
+    S2 = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
+    for feat, texts in zip(sequence_feats, [S1, S2]):
+        tokenizer = Tokenizer(oov_token='OOV')
+        tokenizer.fit_on_texts(texts)
+        padded = pad_sequences(tokenizer.texts_to_sequences(texts), padding='post')
+        sequence_inputs[feat] = padded
+        tokenizers[feat] = tokenizer
 
-    # 前向传播
-    output = model((sparse_input, dense_input), training=False)
+    # 构建输入数据
+    sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+    dense_input = np.random.random((3, len(dense_feats)))
+
+    # 将序列特征从 dict 转换为 list，按顺序传入
+    seq_input_list = [sequence_inputs[feat] for feat in sequence_feats]
+    # print(seq_input_list)
+    # [array([[2, 3, 4],
+    #         [3, 5, 0],
+    #         [2, 4, 6]]), array([[2, 3],
+    #                             [3, 4],
+    #                             [2, 5]])]
+
+    # 执行模型
+    output = model((sparse_input, dense_input, *seq_input_list), training=False)
 
     # 打印结果
     print("Dense 输入:")
-    print(dense_input.numpy())
+    print(dense_input)
     print("Sparse 输入:")
-    print(sparse_input.numpy())
+    print(sparse_input)
+    for feat in sequence_feats:
+        print(f"{feat} 输入:")
+        print(sequence_inputs[feat])
     print("\n模型输出:")
     print(output)
 
 
-    # Dense 输入:
-    # [[0.19882536 0.9919691 ]
-    #  [0.14089882 0.6178216 ]
-    #  [0.59311116 0.79255974]]
-    # Sparse 输入:
-    # [[1 3 3]
-    #  [4 4 0]
-    #  [1 3 2]]
-    #
-    # 模型输出:
-    # (<tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.47370112],
-    #        [0.4806958 ],
-    #        [0.4883328 ]], dtype=float32)>, <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.43123466],
-    #        [0.4493978 ],
-    #        [0.4693598 ]], dtype=float32)>)
 
+# Dense 输入:
+# [[0.28087478 0.97186311]
+#  [0.421542   0.69756784]
+#  [0.87356256 0.36750447]]
+# Sparse 输入:
+# [[1 2 3]
+#  [4 5 5]
+#  [1 2 3]]
+# S1 输入:
+# [[2 3 4]
+#  [3 5 0]
+#  [2 4 6]]
+# S2 输入:
+# [[2 3]
+#  [3 4]
+#  [2 5]]
+#
+# 模型输出:
+# {'finish': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.7947198 ],
+#        [0.64890695],
+#        [0.40848154]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.7677494 ],
+#        [0.63240683],
+#        [0.41896144]], dtype=float32)>}

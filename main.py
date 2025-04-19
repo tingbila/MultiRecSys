@@ -15,7 +15,8 @@ from config.data_config import *
 from models.Fm import Fm
 from models.FM_Embedding import FM_MTL
 from models.WideAndDeep import WideAndDeep
-from models.DeepFm import DeepFM_MTL
+# from models.DeepFm import DeepFM_MTL
+from models.DeepFm_Bak import DeepFM_MTL
 from models.XDeepFM import XDeepFM_MTL
 from models.XDeepFM_Transform import XDeepFM_Transform_MTL
 from models.DCN_Model_MTL import DCN_Model_MTL
@@ -25,13 +26,14 @@ from models.NFM import NFM
 from models.AFm import AFm
 from models.AFM_Embedding import AFM_Embedding
 from models.MMOE import MMOE
+from models.DeepFM_Sequence_MTL import DeepFM_Sequence_MTL
 
 
 
 if __name__ == "__main__":
     # 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
-    data, train_ds, valid_ds,test_ds, feat_columns = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
-    # data, train_ds, valid_ds, test_ds, feat_columns  = create_dataset(file_path="./final_track2_train.txt", embed_dim=embed_dim)
+    data, train_ds, valid_ds,test_ds, feat_columns, sequence_metadata = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
+    # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 打印整个 batch 数据（可根据实际需要调整显示内容）
     # 仅取出第一个 batch 并退出循环
@@ -55,7 +57,8 @@ if __name__ == "__main__":
     # model = WideAndDeep(feat_columns,embed_dim)
 
     # 4. 调用DeepFM模型
-    # model = DeepFM_MTL(feat_columns,embed_dim)
+    model = DeepFM_MTL(feat_columns,embed_dim,sequence_metadata)
+    print(model)
 
     # 5. 调用XDeepFM模型
     # model = XDeepFM_MTL(feat_columns,embed_dim,cin_layers=[7,15])
@@ -86,8 +89,10 @@ if __name__ == "__main__":
 
     # 12. 调用MMOE模型
     # loss: 0.6485 - finish_loss: 0.6384 - like_loss: 0.0101 - finish_auc: 0.4112 - finish_accuracy: 0.6780 - like_auc: 0.0000e+00 - like_accuracy: 1.0000
-    model = MMOE(feat_columns=feat_columns, embed_dim=5)
+    # model = MMOE(feat_columns=feat_columns, embed_dim=5)
 
+    # 13. 调用DeepFM模型 + 含有序列Sequence数据
+    # model = DeepFM_Sequence_MTL(feat_columns,embed_dim)
 
     # 训练并评估
     train_and_evaluate(model, train_ds, valid_ds,test_ds)
