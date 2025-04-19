@@ -159,23 +159,27 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     # 区分数值特征和稀疏特征
     sparse_feats  = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
     dense_feats   = ["time", "duration_time"]
-    sequence_feats = ['actors', 'genres']
+    sequence_feats = ['actors', 'genres']   # 有的时候可能为空列表 []
 
 
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)
     data = process_sparse_feats(data, sparse_feats)
-    data, tokenizers =  process_sequence_feats(data, sequence_feats)
+    if sequence_feats:
+        data, tokenizers = process_sequence_feats(data, sequence_feats)
+    else:
+        tokenizers = {}
     # print(data)
     # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
     # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
 
     # 构建特征字典列表，用于模型输入
     feat_columns = [
-        [dense_feat(feat) for feat in dense_feats],                                               # 数值特征的字典列表
-        [sparse_feat(feat, len(data[feat].unique())) for feat in sparse_feats],                   # 稀疏特征的字典列表
-        [sparse_feat(feat, len(tokenizers[feat].word_index) + 1) for feat in sequence_feats]      # 序列稀疏特征的字典列表
+        [dense_feat(feat) for feat in dense_feats],    # 数值特征的字典列表
+        [sparse_feat(feat, len(data[feat].unique())) for feat in sparse_feats],  # 稀疏特征的字典列表
     ]
+    if sequence_feats:
+        feat_columns.append([sparse_feat(feat, len(tokenizers[feat].word_index) + 1) for feat in sequence_feats])   # 序列稀疏特征的字典列表
     print(feat_columns)
     # [[{'feat': 'time'}, {'feat': 'duration_time'}],
     #  [{'feat': 'uid', 'feat_num': 289},....,{'feat': 'author_id', 'feat_num': 289}],
@@ -191,11 +195,15 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     def df_to_dataset(df):
         sparse_tensor = tf.convert_to_tensor(df[sparse_feats].values, dtype=tf.int32)
         dense_tensor = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
-        # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
-        sequence_tensors = []
-        for feat in sequence_feats:
-            tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
-            sequence_tensors.append(tensor)
+        if sequence_feats:
+            sequence_tensors = []
+            for feat in sequence_feats:
+                # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
+                tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
+                sequence_tensors.append(tensor)
+            input_features = (sparse_tensor, dense_tensor, *sequence_tensors)
+        else:
+            input_features = (sparse_tensor, dense_tensor)
 
         labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
         # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
@@ -203,7 +211,7 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
         labels_like   = labels[:, 1]
 
         # *sequence_tensors 相当于传入sequence_tensors[0]、sequence_tensors[1].....
-        return tf.data.Dataset.from_tensor_slices(((sparse_tensor, dense_tensor, *sequence_tensors), {'finish': labels_finish, 'like': labels_like}))
+        return tf.data.Dataset.from_tensor_slices((input_features, {'finish': labels_finish, 'like': labels_like}))
 
     train_ds = df_to_dataset(train_data)
     valid_ds = df_to_dataset(valid_data)
