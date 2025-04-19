@@ -15,8 +15,7 @@ from config.data_config import *
 from models.Fm import Fm
 from models.FM_Embedding import FM_MTL
 from models.WideAndDeep import WideAndDeep
-# from models.DeepFm import DeepFM_MTL
-from models.DeepFm_Bak import DeepFM_MTL
+from models.DeepFm import DeepFM_MTL
 from models.XDeepFM import XDeepFM_MTL
 from models.XDeepFM_Transform import XDeepFM_Transform_MTL
 from models.DCN_Model_MTL import DCN_Model_MTL
@@ -26,7 +25,6 @@ from models.NFM import NFM
 from models.AFm import AFm
 from models.AFM_Embedding import AFM_Embedding
 from models.MMOE import MMOE
-from models.DeepFM_Sequence_MTL import DeepFM_Sequence_MTL
 
 
 
