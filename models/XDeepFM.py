@@ -16,7 +16,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
 class XDeepFM_MTL(Model):
-    def __init__(self, feat_columns, emb_size, cin_layers=[7,15]):
+    def __init__(self, feat_columns, emb_size=5, cin_layers=[7,15]):
         super().__init__()
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
         self.seq_feats = feat_columns[2] if len(feat_columns) > 2 else []

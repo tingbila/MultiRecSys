@@ -15,7 +15,7 @@ from config.data_config import *
 
 
 class FM_MTL(Model):
-    def __init__(self, feat_columns, emb_size):
+    def __init__(self, feat_columns, emb_size=5):
         super().__init__()
         # feat_columns = [
         #     [{'feat': 'I1'}, {'feat': 'I2'}],

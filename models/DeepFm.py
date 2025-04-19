@@ -18,7 +18,7 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 
 
 class DeepFM_MTL(Model):
-    def __init__(self, feat_columns, emb_size):
+    def __init__(self, feat_columns, emb_size=5):
         """
         :param feat_columns:
         :param emb_size:
