@@ -15,8 +15,13 @@ class DeepFM_Sequence_MTL(Model):
     def __init__(self, feat_columns, emb_size):
         super().__init__()
         self.dense_feats, self.sparse_feats, self.sequence_feats = feat_columns[0], feat_columns[1], feat_columns[2]
+        # feat_columns = [
+        #     [{'feat': 'I1'}, {'feat': 'I2'}],
+        #     [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
+        #     [{'feat': 'S1', 'feat_num': 20}, {'feat': 'S2', 'feat_num': 20}]
+        # ]
         self.dense_size = len(self.dense_feats)
-        self.emb_size = emb_size
+        self.emb_size = emb_size # 5
 
         self.linear_dense = layers.Dense(1)
 
@@ -65,30 +70,30 @@ class DeepFM_Sequence_MTL(Model):
 
 
         # 第二部分：FM部分
-        embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
         # embeddings shape: (batch_size, num_sparse_features, emb_size)
+        embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
+        # 为了后续DNN使用
+        flatten_embeddings = tf.reshape(embeddings, shape=(-1, len(self.sparse_feats) * self.emb_size))  # flatten_embeddings shape: (batch_size, num_sparse_feats * emb_size)
 
         summed = tf.reduce_sum(embeddings, axis=1)  # summed shape: (batch_size, emb_size)
         squared_sum = tf.square(summed)  # squared_sum shape: (batch_size, emb_size)
         squared = tf.reduce_sum(tf.square(embeddings), axis=1)  # squared shape: (batch_size, emb_size)
-        second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1,
-                                           keepdims=True)  # second_order shape: (batch_size, 1)
+        second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1,keepdims=True)  # second_order shape: (batch_size, 1)
 
 
         # 第三部分：DNN部分
         pooled_sequence_embeddings = []
         for i, feat in enumerate(self.sequence_feats):
+            # 获取相应sequence字段对应的V矩阵和数据
             feat_name = feat['feat']
-            seq_emb = self.sequence_emb[feat_name](
-                sequence_inputs[feat_name])  # seq_emb shape: (batch_size, seq_len, emb_size)
-            pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)  # pooled shape: (batch_size, 1, emb_size)
+            seq_emb = self.sequence_emb[feat_name](sequence_inputs[feat_name])     # seq_emb shape: (batch_size, seq_len, emb_size)
+            pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)                # pooled shape: (batch_size, 1, emb_size)
             pooled_sequence_embeddings.append(pooled)
 
         pooled_sequence_embeddings = tf.concat(pooled_sequence_embeddings,axis=1)  # pooled_sequence_embeddings shape: (batch_size, num_sequence_feats, emb_size)
         pooled_sequence_embeddings = tf.reshape(pooled_sequence_embeddings, shape=(-1, len(self.sequence_feats) * self.emb_size))  # pooled_sequence_embeddings shape: (batch_size, num_sequence_feats * emb_size)
 
-        flatten_embeddings = tf.reshape(embeddings, shape=(-1, len(self.sparse_feats) * self.emb_size))  # flatten_embeddings shape: (batch_size, num_sparse_feats * emb_size)
-
+        # 将连续dense_inputs（非处理） + 离散Embedding + 序列Embedding拼接到一起
         dnn_input = tf.concat([dense_inputs, flatten_embeddings, pooled_sequence_embeddings], axis=1)
         # dnn_input shape: (batch_size, dense_size + num_sparse_feats * emb_size + num_sequence_feats * emb_size)
 
@@ -115,7 +120,7 @@ if __name__ == '__main__':
     feat_columns = [
         [{'feat': 'I1'}, {'feat': 'I2'}],
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
-        [{'feat': 'S1', 'feat_num': 20}, {'feat': 'S2', 'feat_num': 20}]
+        [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}]  # feat_num其实就是几个离散的单词word
     ]
 
     model = DeepFM_Sequence_MTL(feat_columns=feat_columns, emb_size=5)
