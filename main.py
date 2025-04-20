@@ -79,14 +79,14 @@ if __name__ == "__main__":
     # model = NFM(feat_columns,embed_dim,batch_size)
 
     # 10. 调用AFm模型
-    # model = AFm(feat_columns,embed_dim)
+    model = AFm(feat_columns)
 
     # 11. 调用AFM_Embedding模型
     # model = AFM_Embedding(feat_columns,embed_dim)
 
     # 12. 调用MMOE模型
     # loss: 0.6485 - finish_loss: 0.6384 - like_loss: 0.0101 - finish_auc: 0.4112 - finish_accuracy: 0.6780 - like_auc: 0.0000e+00 - like_accuracy: 1.0000
-    model = MMOE(feat_columns=feat_columns)
+    # model = MMOE(feat_columns=feat_columns)
 
     # 13. 调用DeepFM模型 + 含有序列Sequence数据
     # model = DeepFM_Sequence_MTL(feat_columns,embed_dim)

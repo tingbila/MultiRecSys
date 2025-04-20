@@ -16,22 +16,25 @@ import torch
 
 
 class AFm (Model):
-    def __init__(self, feat_columns, emb_size):
+    def __init__(self, feat_columns, emb_size=5):
         super().__init__()
         # feat_columns = [
         #     [{'feat': 'I1'}, {'feat': 'I2'}],
         #     [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
         # ]
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
+
         self.emb_size = emb_size
 
-        self.linear_dense = layers.Dense(1)
-
+        # FM当中离散和连续字段是用一个V矩阵
         self.V = self.add_weight(
             shape=(len(self.dense_feats) + len(self.sparse_feats), self.emb_size),
             initializer="random_normal",
             trainable=True
         )
+
+        # Linear
+        self.linear_dense = layers.Dense(1)
 
         # Attention层参数（权重参数）
         self.attention_dense = layers.Dense(units=64, activation='relu',name='attention_dense')
@@ -44,7 +47,8 @@ class AFm (Model):
 
 
     def call(self, inputs, training=False):
-        sparse_inputs, dense_inputs = inputs
+        sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
+        dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
@@ -54,7 +58,6 @@ class AFm (Model):
 
         # 拼接离散特征和连续特征
         X = tf.concat([tf.cast(sparse_inputs, tf.float32), dense_inputs], axis=1)
-        # print(X)
         """
         tf.Tensor(
         [[2.         2.         2.         0.3107803  0.3713479 ]
@@ -67,19 +70,17 @@ class AFm (Model):
 
 
         # 第二部分：AFM交互项部分（下面的这是公式优化写法）
-        # 计算embedding后的交叉向量对   shape=(3, 5, 3)
-        embeddings = tf.expand_dims(X, axis=2) * tf.expand_dims(self.V, axis=0)  # shape: [batch, num_feat, emb_size]
-        # print(embeddings)
+        # 计算embedding后的交叉向量对  shape=(3, 5, 3)
+        embeddings = tf.expand_dims(X, axis=2) * tf.expand_dims(self.V, axis=0)  # shape: [batch, num_sparse + num_dense, emb_size]
 
         pairwise_interactions = []
         num_feat = embeddings.shape[1]
         for i in range(num_feat):
             for j in range(i + 1, num_feat):
                 pairwise_interactions.append(embeddings[:, i, :] * embeddings[:, j, :])  # element-wise product
-        interactions = tf.stack(pairwise_interactions, axis=1)  # shape: [batch, num_pairs, emb_size]
-        # print(interactions.shape) # (3, 10, 3)
+        interactions = tf.stack(pairwise_interactions, axis=1)       # [batch, num_pairs, emb_size]   (3, 10, 3)
 
-        # Attention部分
+        # Attention部分-计算每个pair交互的权重
         attention_temp = self.attention_dense(interactions)          # [batch, num_pairs, 64]
         attention_scores = self.attention_score(attention_temp)      # [batch, num_pairs, 1]
         attention_weights = tf.nn.softmax(attention_scores, axis=1)  # [batch, num_pairs, 1]
@@ -119,9 +120,10 @@ class AFm (Model):
         #         [0.10003331]
         #         [0.10002378]]], shape=(3, 10, 1), dtype=float32)
 
-        attention_output = tf.reduce_sum(attention_weights * interactions, axis=1)  # [batch, emb_size] # (3, 3)
-        # print(attention_output.shape)
-        afm_out = tf.reduce_sum(attention_output, axis=1, keepdims=True)  # [batch, 1]
+        # 基于权重计算最终的结果 交互的结果重新更新
+        # [batch, num_pairs, emb_size] *  [batch, num_pairs, 1] = [batch, num_pairs, emb_size] ==> [batch, emb_size]
+        attention_output = tf.reduce_sum(attention_weights * interactions, axis=1)   # [batch, emb_size]
+        afm_out = tf.reduce_sum(attention_output, axis=1, keepdims=True)             # [batch, 1]
 
         logits = linear_out + afm_out
 
@@ -134,52 +136,43 @@ class AFm (Model):
 
 
 if __name__ == '__main__':
-    # 假设有 2 个 dense 特征，3 个 sparse 特征
+    # 1. 不使用序列特征
     dense_feats = ['I1', 'I2']
     sparse_feats = ['C1', 'C2', 'C3']
-
-    # 每个 sparse 特征的唯一值个数分别为 10, 8, 6
     feat_columns = [
         [{'feat': 'I1'}, {'feat': 'I2'}],
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
     ]
 
-    # 初始化模型
-    model = AFm(feat_columns=feat_columns, emb_size=3)
-
-    # 模拟 batch size 为 3 的输入
-    batch_size = 3
-    dense_input = tf.random.uniform(shape=(batch_size, len(dense_feats)), dtype=tf.float32)
-    sparse_input = tf.random.uniform(shape=(batch_size, len(sparse_feats)), maxval=6, dtype=tf.int32)
-
-    # 前向传播
+    model = AFm(feat_columns=feat_columns, emb_size=5)
+    sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+    dense_input = np.random.random((3, len(dense_feats)))
     output = model((sparse_input, dense_input), training=False)
 
-    # 打印结果
     print("Dense 输入:")
-    print(dense_input.numpy())
+    print(dense_input)
     print("Sparse 输入:")
-    print(sparse_input.numpy())
+    print(sparse_input)
     print("\n模型输出:")
     print(output)
-    print(model.summary())
+    model.summary()
 
 
-    # Dense 输入:
-    # [[0.19882536 0.9919691 ]
-    #  [0.14089882 0.6178216 ]
-    #  [0.59311116 0.79255974]]
-    # Sparse 输入:
-    # [[1 3 3]
-    #  [4 4 0]
-    #  [1 3 2]]
-    #
-    # 模型输出:
-    # (<tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.47370112],
-    #        [0.4806958 ],
-    #        [0.4883328 ]], dtype=float32)>, <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-    # array([[0.43123466],
-    #        [0.4493978 ],
-    #        [0.4693598 ]], dtype=float32)>)
-
+# Dense 输入:
+# [[0.09572926 0.87675378]
+#  [0.60038836 0.92242923]
+#  [0.22504737 0.09761649]]
+# Sparse 输入:
+# [[1 2 3]
+#  [4 5 5]
+#  [1 2 3]]
+#
+# 模型输出:
+# {'finish': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.9464742 ],
+#        [0.99231625],
+#        [0.9178204 ]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
+# array([[0.6779792 ],
+#        [0.77899694],
+#        [0.6514487 ]], dtype=float32)>}
+# Model: "a_fm"
