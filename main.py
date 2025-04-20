@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 2. 调用模型
-    model_name = "WideAndDeep"
+    model_name = "XDeepFM_Transform_MTL"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估
