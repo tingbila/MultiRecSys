@@ -54,7 +54,6 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
 if __name__ == "__main__":
     # 1. 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
     data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
-    # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 2. 调用模型
     model_name = "NFM"
@@ -62,11 +61,3 @@ if __name__ == "__main__":
 
     # 3. 训练并评估
     train_and_evaluate(model, train_ds, valid_ds,test_ds)
-    
-    #    finish_accuracy  finish_loss  like_accuracy  like_loss      loss  val_finish_accuracy  val_finish_loss  val_like_accuracy  val_like_loss  val_loss
-    # 0             0.68     0.633306           0.68   0.675442  1.289731             0.571429         0.790080           0.714286       0.682514  1.501765
-    # 1             0.68     0.477380           0.88   0.637175  1.134881             0.428571         0.981986           1.000000       0.629791  1.696161
-    # 2             0.80     0.465747           0.96   0.586718  0.986695             0.428571         1.355031           1.000000       0.575927  2.081305
-    # 3             0.80     0.369490           0.96   0.518443  0.916458             0.428571         1.668533           1.000000       0.529664  2.387516
-    # 4             0.80     0.352170           0.96   0.497951  0.855214             0.428571         2.065776           1.000000       0.476627  2.785610
-    # 5             0.80     0.308622           0.96   0.458282  0.770337             0.428571         2.633919           1.000000       0.415921  3.370546
