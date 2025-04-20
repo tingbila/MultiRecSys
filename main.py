@@ -50,13 +50,14 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
     return model_factory[model_name]()
 
 
+
 if __name__ == "__main__":
     # 1. 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
     data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
     # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 2. 调用模型
-    model_name = "DeepCrossing_Residual"
+    model_name = "NFM"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估
