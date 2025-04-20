@@ -37,7 +37,7 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
         "XDeepFM_MTL": lambda: XDeepFM_MTL(feat_columns),
         "XDeepFM_Transform_MTL": lambda: XDeepFM_Transform_MTL(feat_columns),
         "DCN_Model_MTL": lambda: DCN_Model_MTL(feat_columns),
-        "XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL": lambda: XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL(feat_columns),
+        "XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL": lambda: XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL(feat_columns),   # 这是自己进行创新的算法-DCN-CrossNetwork引入了Attention注意力机制
         "DeepCrossing_Residual": lambda: DeepCrossing_Residual(feat_columns),
         "NFM": lambda: NFM(feat_columns),
         "AFm": lambda: AFm(feat_columns),
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
     # 2. 调用模型
-    model_name = "DCN_Model_MTL"
+    model_name = "XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估

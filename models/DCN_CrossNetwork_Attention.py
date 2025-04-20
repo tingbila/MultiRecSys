@@ -79,7 +79,7 @@ if __name__ == '__main__':
     # 实例化并测试向量级交叉层
     attn_cross = VectorWiseAttentionCross(embed_dim = embed_dim,num_layers=num_layers, num_heads=num_heads, key_dim=key_dim)
     output = attn_cross(inputs)
-    print(attn_cross.biases)
+    # print(attn_cross.biases)
 
     print("\nVectorWiseAttentionCross 输出形状:", output.shape)
     print("输出数据:\n", output.numpy())
