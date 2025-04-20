@@ -35,14 +35,14 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
         "WideAndDeep": lambda: WideAndDeep(feat_columns),
         "DeepFM_MTL": lambda: DeepFM_MTL(feat_columns),
         "XDeepFM_MTL": lambda: XDeepFM_MTL(feat_columns),
-        "XDeepFM_Transform_MTL": lambda: XDeepFM_Transform_MTL(feat_columns, embed_dim, batch_size),
-        "DCN_Model_MTL": lambda: DCN_Model_MTL(feat_columns, embed_dim, batch_size),
+        "XDeepFM_Transform_MTL": lambda: XDeepFM_Transform_MTL(feat_columns),
+        "DCN_Model_MTL": lambda: DCN_Model_MTL(feat_columns),
         "XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL": lambda: XDeepFM_Transform_DCN_CrossNetwork_Attention_MTL(feat_columns),
         "DeepCrossing_Residual": lambda: DeepCrossing_Residual(feat_columns),
         "NFM": lambda: NFM(feat_columns),
-        "AFm": lambda: AFm(feat_columns, embed_dim, batch_size),
+        "AFm": lambda: AFm(feat_columns),
         "AFM_Embedding": lambda: AFM_Embedding(feat_columns),
-        "MMOE": lambda: MMOE(feat_columns, embed_dim, batch_size)
+        "MMOE": lambda: MMOE(feat_columns)
     }
 
     if model_name not in model_factory:
