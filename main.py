@@ -44,7 +44,7 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
         "AFM_Embedding": lambda: AFM_Embedding(feat_columns),
         "MMOE": lambda: MMOE(feat_columns)
     }
-
+    
     if model_name not in model_factory:
         raise ValueError(f"未知模型: {model_name}")
     return model_factory[model_name]()
