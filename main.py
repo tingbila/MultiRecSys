@@ -51,15 +51,15 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
 
 
 if __name__ == "__main__":
-    # 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
+    # 1. 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
     data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
     # {'tokenizers': {'actors': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126250>, 'genres': <keras_preprocessing.text.Tokenizer object at 0x0000029E0D126E50>}, 'pad_len_dict': {'actors': 2, 'genres': 2}}
 
-    # 调用模型
+    # 2. 调用模型
     model_name = "AFM_Embedding"
     model = get_model(model_name, feat_columns)
 
-    # 训练并评估
+    # 3. 训练并评估
     train_and_evaluate(model, train_ds, valid_ds,test_ds)
     
     #    finish_accuracy  finish_loss  like_accuracy  like_loss      loss  val_finish_accuracy  val_finish_loss  val_like_accuracy  val_like_loss  val_loss
