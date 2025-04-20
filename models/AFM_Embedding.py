@@ -15,7 +15,7 @@ from config.data_config import *
 
 
 class AFM_Embedding(Model):
-    def __init__(self, feat_columns, emb_size):
+    def __init__(self, feat_columns, emb_size=5):
         super().__init__()
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
         self.dense_size = len(self.dense_feats)
