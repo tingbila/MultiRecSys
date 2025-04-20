@@ -159,8 +159,8 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     # 区分数值特征和稀疏特征
     sparse_feats  = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
     dense_feats   = ["time", "duration_time"]
-    sequence_feats = ['actors', 'genres']   # 有的时候可能为空列表 []
-    # sequence_feats = []  # 有的时候可能为空列表 []
+    # sequence_feats = ['actors', 'genres']   # 有的时候可能为空列表 []
+    sequence_feats = []  # 有的时候可能为空列表 []
     
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)

@@ -15,7 +15,7 @@ from config.data_config import *
 import torch
 
 
-class AFm (Model):
+class AFm(Model):
     def __init__(self, feat_columns, emb_size=5):
         super().__init__()
         # feat_columns = [
@@ -26,29 +26,37 @@ class AFm (Model):
 
         self.emb_size = emb_size
 
-        # FM当中离散和连续字段是用一个V矩阵
+        # Linear
+        self.linear_dense = layers.Dense(1)
+
+        # Attention层参数（权重参数）
+        self.attention_dense = layers.Dense(units=64, activation='relu', name='attention_dense')
+        self.attention_score = layers.Dense(units=1, activation=None, name='attention_score')
+
+        # 每个任务一个输出层
+        self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
+        self.like_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='like')
+
+    def build(self, input_shape):
+        """
+        :param input_shape:
+        :return:
+        为什么不能在 __init__ 中定义 self.V？
+        在 __init__ 方法中定义 V 是没有问题的，但是在模型的构建流程中，V 并没有被正式注册为一个权重（即与 Keras 的内部机制没有建立联系），因为：
+        add_weight 是一个需要在模型的构建过程中调用的方法，它会把权重注册到模型的计算图中。
+        只有在 build 方法中调用 add_weight，TensorFlow 才会正确地把这个权重注册到模型的状态中，使得它能够参与训练和保存过程。
+        """
+        # 在 build 中定义并注册 V 权重
         self.V = self.add_weight(
+            name="V",  # 这里命名为 "V"，确保能清楚识别
             shape=(len(self.dense_feats) + len(self.sparse_feats), self.emb_size),
             initializer="random_normal",
             trainable=True
         )
 
-        # Linear
-        self.linear_dense = layers.Dense(1)
-
-        # Attention层参数（权重参数）
-        self.attention_dense = layers.Dense(units=64, activation='relu',name='attention_dense')
-        self.attention_score = layers.Dense(units=1, activation=None,name='attention_score')
-
-        # 每个任务一个输出层
-        self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
-        self.like_output_layer   = tf.keras.layers.Dense(1, activation='sigmoid', name='like')
-
-
-
     def call(self, inputs, training=False):
-        sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
-        dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
+        sparse_inputs = inputs[0]  # shape: (batch_size, num_sparse)
+        dense_inputs = inputs[1]  # shape: (batch_size, num_dense)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
@@ -68,21 +76,21 @@ class AFm (Model):
         # 第一部分：线性部分(离散变量和连续都要走线性模型)
         linear_out = self.linear_dense(X)
 
-
         # 第二部分：AFM交互项部分（下面的这是公式优化写法）
         # 计算embedding后的交叉向量对  shape=(3, 5, 3)
-        embeddings = tf.expand_dims(X, axis=2) * tf.expand_dims(self.V, axis=0)  # shape: [batch, num_sparse + num_dense, emb_size]
+        embeddings = tf.expand_dims(X, axis=2) * tf.expand_dims(self.V,
+                                                                axis=0)  # shape: [batch, num_sparse + num_dense, emb_size]
 
         pairwise_interactions = []
         num_feat = embeddings.shape[1]
         for i in range(num_feat):
             for j in range(i + 1, num_feat):
                 pairwise_interactions.append(embeddings[:, i, :] * embeddings[:, j, :])  # element-wise product
-        interactions = tf.stack(pairwise_interactions, axis=1)       # [batch, num_pairs, emb_size]   (3, 10, 3)
+        interactions = tf.stack(pairwise_interactions, axis=1)  # [batch, num_pairs, emb_size]   (3, 10, 3)
 
         # Attention部分-计算每个pair交互的权重
-        attention_temp = self.attention_dense(interactions)          # [batch, num_pairs, 64]
-        attention_scores = self.attention_score(attention_temp)      # [batch, num_pairs, 1]
+        attention_temp = self.attention_dense(interactions)  # [batch, num_pairs, 64]
+        attention_scores = self.attention_score(attention_temp)  # [batch, num_pairs, 1]
         attention_weights = tf.nn.softmax(attention_scores, axis=1)  # [batch, num_pairs, 1]
         # print(attention_weights)
         # print(attention_weights.shape)
@@ -122,17 +130,16 @@ class AFm (Model):
 
         # 基于权重计算最终的结果 交互的结果重新更新
         # [batch, num_pairs, emb_size] *  [batch, num_pairs, 1] = [batch, num_pairs, emb_size] ==> [batch, emb_size]
-        attention_output = tf.reduce_sum(attention_weights * interactions, axis=1)   # [batch, emb_size]
-        afm_out = tf.reduce_sum(attention_output, axis=1, keepdims=True)             # [batch, 1]
+        attention_output = tf.reduce_sum(attention_weights * interactions, axis=1)  # [batch, emb_size]
+        afm_out = tf.reduce_sum(attention_output, axis=1, keepdims=True)  # [batch, 1]
 
         logits = linear_out + afm_out
 
         # 分支输出
         finish_output = self.finish_output_layer(logits)
-        like_output   = self.like_output_layer(logits)
+        like_output = self.like_output_layer(logits)
 
         return {'finish': finish_output, 'like': like_output}
-
 
 
 if __name__ == '__main__':
@@ -156,7 +163,6 @@ if __name__ == '__main__':
     print("\n模型输出:")
     print(output)
     model.summary()
-
 
 # Dense 输入:
 # [[0.09572926 0.87675378]
