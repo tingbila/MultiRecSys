@@ -110,7 +110,7 @@ class MMOE(Model):
             seq_flatten_embeddings = tf.reshape(seq_embeds_concat, shape=(-1, seq_embeds_concat.shape[1] * self.emb_size)) # shape: (batch_size, num_seq_fields * emb_dim)
 
             # sparse、seq、dense进行拼接
-            mmoe_input = tf.concat([dense_inputs,sparse_flatten_embeddings, seq_flatten_embeddings], axis=1)    # shape=(2, X) + shape=(2, Y) + shape=(2, Z)  => shape=(2, 17)im)
+            mmoe_input = tf.concat([dense_inputs,sparse_flatten_embeddings, seq_flatten_embeddings], axis=1)    # shape=(2, X) + shape=(2, Y) + shape=(2, Z)  => shape=(2, 17))
         else:
             # sparse、dense进行拼接
             mmoe_input = tf.concat([dense_inputs,sparse_flatten_embeddings], axis=1)

@@ -5,7 +5,6 @@
 # @Email : mingyang.zhang@ushow.media
 
 
-# models/DeepFm.py
 from tensorflow.keras import layers, Model
 import tensorflow as tf
 import numpy as np
