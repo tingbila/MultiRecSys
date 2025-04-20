@@ -5,7 +5,6 @@
 # @Email : mingyang.zhang@ushow.media
 
 
-# models/DeepFm.py
 from tensorflow.keras import layers, Model
 import tensorflow as tf
 import numpy as np
@@ -13,58 +12,80 @@ import tensorflow as tf
 import numpy as np
 from config.data_config import *
 
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
 
 class DeepCrossing_Residual(Model):
-    def __init__(self, feat_columns, emb_size, hidden_units=[128, 64, 32]):
+    def __init__(self, feat_columns, emb_size=5, hidden_units=[128, 64, 32]):
         super().__init__()
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
-        self.dense_size = len(self.dense_feats)
+        self.seq_feats = feat_columns[2] if len(feat_columns) > 2 else []
+
         self.emb_size = emb_size
 
         self.linear_dense = layers.Dense(1)
 
-        self.first_order_sparse_emb = [
+        self.linear_sparse_embeds = [
             layers.Embedding(input_dim=feat['feat_num'], output_dim=1)
             for feat in self.sparse_feats
         ]
 
-        self.second_order_sparse_emb = [
+        self.sparse_embeds = [
             layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size)
             for feat in self.sparse_feats
         ]
 
+        # Sequence embedding layers
+        # 仅当存在序列特征时才构造 seq embedding 层
+        if self.seq_feats:
+            self.seq_embeds = [layers.Embedding(input_dim=feat['feat_num'], output_dim=emb_size, mask_zero=True) for feat in self.seq_feats]
 
+        # 残差模块
         self.residual_blocks = []
-        for units in hidden_units:
-            self.residual_blocks.append(
-                tf.keras.Sequential([
-                    layers.Dense(units, activation='relu'),
-                    layers.Dense(self.dense_size + len(self.sparse_feats) * self.emb_size)    # 输出维度与输入一致，便于残差连接
-                ])
-            )
+        if not self.seq_feats:
+            for units in hidden_units:
+                self.residual_blocks.append(
+                    tf.keras.Sequential([
+                        layers.Dense(units, activation='relu'),
+                        layers.Dense(len(self.dense_feats) + len(self.sparse_feats) * self.emb_size)    # 输出维度与输入一致，便于残差连接
+                    ])
+                )
+        else:
+            for units in hidden_units:
+                self.residual_blocks.append(
+                    tf.keras.Sequential([
+                        layers.Dense(units, activation='relu'),
+                        layers.Dense(len(self.dense_feats) + len(self.sparse_feats) * self.emb_size + len(self.seq_feats) * self.emb_size)    # 输出维度与输入一致，便于残差连接
+                    ])
+                )
         self.residual_output_layer = tf.keras.layers.Dense(1)
 
         # 每个任务一个输出层
         self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
         self.like_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='like')
 
+
     def call(self, inputs, training=False):
-        """
-        :param inputs:
-        :param training: Keras在 fit() 时并没有显式指定 training=True，因为它自动管理了这个标志位！
-        :return:
-        """
-        sparse_inputs, dense_inputs = inputs
+        sparse_inputs = inputs[0]   # shape: (batch_size, num_sparse)
+        dense_inputs  = inputs[1]   # shape: (batch_size, num_dense)
+        seq_inputs    = inputs[2:] if self.seq_feats else []  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
         # Sparse 输入:
         # [[5 4 1]
         #  [3 2 3]]
+        # seq_inputs 输入:
+        # [array([[2, 3, 4],
+        #         [3, 5, 0],
+        #         [2, 4, 6]]), array([[2, 3],
+        #                             [3, 4],
+        #                             [2, 5]])]
 
-        # 第一部分：线性部分（注意：论文当中的就是一个纯深度模型，是没有线性这部分的）
-        linear_dense_out = self.linear_dense(dense_inputs)
-        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.first_order_sparse_emb)],axis=1)
+
+        # 第一部分：线性部分
+        linear_dense_out  = self.linear_dense(dense_inputs)
+        linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.linear_sparse_embeds)],axis=1)
         # print("--------------1-----------")
         # print(linear_sparse_out)
         # [[ 0.01539519 -0.04832922 -0.02953873]
@@ -77,8 +98,9 @@ class DeepCrossing_Residual(Model):
         #  [0.6256093 ]]
 
         # 第二部分：DNN 部分（residual部分）
-        embeddings = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.second_order_sparse_emb)], axis=1)
-        # print(embeddings)
+        # 1️⃣ 稀疏特征 embedding
+        sparse_embeds = tf.stack([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.sparse_embeds)],axis=1)  # shape: (batch_size, num_sparse_fields, emb_dim)
+        # print(sparse_embeds) shape: (batch_size=2, field_num=3, embedding_dim=5)
         # Tensor("stack:0", shape=(2, 3, 5), dtype=float32)
         # tf.Tensor(
         # [[[-0.0292243   0.03134212 -0.00664638  0.0308771   0.03662998]
@@ -89,8 +111,7 @@ class DeepCrossing_Residual(Model):
         #   [-0.03824542  0.00229248  0.00047214  0.0488669  -0.04776417]
         #   [-0.01696395 -0.00136379  0.04921383  0.04019973 -0.00026955]]], shape=(2, 3, 5), dtype=float32)
 
-
-        flatten_embeddings = tf.reshape(embeddings, shape=(-1, len(self.sparse_feats) * self.emb_size))
+        sparse_flatten_embeddings = tf.reshape(sparse_embeds, shape=(-1, len(self.sparse_feats) * self.emb_size))  # shape: (batch_size, num_sparse_fields * emb_dim)
         # print(flatten_embeddings)
         # Tensor("Reshape:0", shape=(2, 15), dtype=float32)
         # tf.Tensor(
@@ -99,7 +120,24 @@ class DeepCrossing_Residual(Model):
         #  [-0.03806484  0.0479795   0.0132894  -0.03121579 -0.0166074   0.00733398
         #    0.00708617 -0.00899755  0.02732437 -0.00605234 -0.02896208  0.02931662
         #    0.0044607   0.03854013  0.04758653]], shape=(2, 15), dtype=float32)
-        dnn_input = tf.concat([dense_inputs, flatten_embeddings], axis=1)
+
+        # ---------- 序列特征部分 ----------
+        if self.seq_feats:
+            seq_embeds = []
+            for i, (seq_input, seq_layer) in enumerate(zip(seq_inputs, self.seq_embeds)):
+                seq_emb = seq_layer(seq_input)     # (batch_size, seq_len, emb_dim)
+                pooled = tf.reduce_mean(seq_emb, axis=1,keepdims=True)  # (batch_size, 1, emb_dim)  从这可以看出边长序列的字段数据最终整体也是当成一个字段处理
+                seq_embeds.append(pooled)
+            # 拼接所有嵌入特征
+            seq_embeds_concat = tf.concat(seq_embeds, axis=1)  # (batch_size, num_seq_fields, emb_dim)
+            seq_flatten_embeddings = tf.reshape(seq_embeds_concat, shape=(-1, seq_embeds_concat.shape[1] * self.emb_size))  # shape: (batch_size, num_seq_fields * emb_dim)
+
+            # sparse、seq、dense进行拼接
+            dnn_input = tf.concat([dense_inputs, sparse_flatten_embeddings, seq_flatten_embeddings],axis=1)  # shape=(2, X) + shape=(2, Y) + shape=(2, Z)  => shape=(2, 17))
+        else:
+            # sparse、dense进行拼接
+            dnn_input = tf.concat([dense_inputs, sparse_flatten_embeddings], axis=1)
+
         x = dnn_input
         for block in self.residual_blocks:
             x = x + block(x, training=training)  # 残差连接
@@ -115,94 +153,66 @@ class DeepCrossing_Residual(Model):
 
 
 if __name__ == '__main__':
-    # 假设有 2 个 dense 特征，3 个 sparse 特征
-    dense_feats = ['I1', 'I2']
-    sparse_feats = ['C1', 'C2', 'C3']
+    use_sequence = False
 
-    # 每个 sparse 特征的唯一值个数分别为 10, 8, 6
-    feat_columns = [
-        [{'feat': 'I1'}, {'feat': 'I2'}],
-        [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
-    ]
+    if not use_sequence:
+        # 1. 不使用序列特征
+        dense_feats = ['I1', 'I2']
+        sparse_feats = ['C1', 'C2', 'C3']
+        feat_columns = [
+            [{'feat': 'I1'}, {'feat': 'I2'}],
+            [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
+        ]
 
-    # 初始化模型
-    model = DeepCrossing_Residual(feat_columns=feat_columns, emb_size=5, hidden_units=[128, 64, 32])
+        model = DeepCrossing_Residual(feat_columns=feat_columns, emb_size=5)
+        sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+        dense_input = np.random.random((3, len(dense_feats)))
+        output = model((sparse_input, dense_input), training=False)
 
-    # 模拟 batch size 为 3 的输入
-    batch_size = 3
-    dense_input = tf.random.uniform(shape=(batch_size, len(dense_feats)), dtype=tf.float32)
-    sparse_input = tf.random.uniform(shape=(batch_size, len(sparse_feats)), maxval=6, dtype=tf.int32)
+        print("Dense 输入:")
+        print(dense_input)
+        print("Sparse 输入:")
+        print(sparse_input)
+        print("\n模型输出:")
+        print(output)
+        model.summary()
+    else:
+    # 2. 使用序列特征
+        dense_feats = ['I1', 'I2']
+        sparse_feats = ['C1', 'C2', 'C3']
+        sequence_feats = ['S1', 'S2']
+        feat_columns = [
+            [{'feat': 'I1'}, {'feat': 'I2'}],
+            [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
+            [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}]
+        ]
 
-    # 前向传播
-    output = model((sparse_input, dense_input), training=False)
+        model = DeepCrossing_Residual(feat_columns=feat_columns, emb_size=5)
+        sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+        dense_input = np.random.random((3, len(dense_feats)))
 
-    # 打印结果
-    print("Dense 输入:")
-    print(dense_input.numpy())
-    print("Sparse 输入:")
-    print(sparse_input.numpy())
-    print("\n模型输出:")
-    print(output)
-    print(model.summary())
+        S1 = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
+        S2 = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
+        sequence_inputs = {}
+        tokenizers = {}
+        for feat, texts in zip(sequence_feats, [S1, S2]):
+            tokenizer = Tokenizer(oov_token='OOV')
+            tokenizer.fit_on_texts(texts)
+            padded = pad_sequences(tokenizer.texts_to_sequences(texts), padding='post')
+            sequence_inputs[feat] = padded
+            tokenizers[feat] = tokenizer
 
-    # 用法举例:
-    # model = DeepCrossing(input_dim=128)
-    # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['AUC'])
-    # model.fit(train_data, train_labels, batch_size=32, epochs=10)
+        seq_input_list = [sequence_inputs[feat] for feat in sequence_feats]
+        output = model((sparse_input, dense_input, *seq_input_list), training=False)
 
-    # Dense
-    # 输入:
-    # [[0.67293584 0.2541728]
-    #  [0.96817994 0.2788309]
-    # [0.8373424
-    # 0.55251396]]
-    # Sparse
-    # 输入:
-    # [[1 3 0]
-    #  [0 0 0]
-    # [2
-    # 0
-    # 3]]
-    #
-    # 模型输出:
-    # {'finish': < tf.Tensor: shape = (3, 1), dtype = float32, numpy =
-    # array([[0.35982525],
-    #        [0.34824157],
-    #        [0.26548928]], dtype=float32) >, 'like': < tf.Tensor: shape = (3, 1), dtype = float32, numpy =
-    # array([[0.58888644],
-    #        [0.59651387],
-    #        [0.65356797]], dtype=float32) >}
-# Model: "deep_crossing__residual"
-# ┌─────────────────────────────────┬────────────────────────┬───────────────┐
-# │ Layer (type)                    │ Output Shape           │       Param # │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ dense (Dense)                   │ (3, 1)                 │             3 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding (Embedding)           │ (3, 1)                 │            10 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding_1 (Embedding)         │ (3, 1)                 │             8 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding_2 (Embedding)         │ (3, 1)                 │             6 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding_3 (Embedding)         │ (3, 5)                 │            50 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding_4 (Embedding)         │ (3, 5)                 │            40 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ embedding_5 (Embedding)         │ (3, 5)                 │            30 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ sequential (Sequential)         │ (3, 17)                │         4,497 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ sequential_1 (Sequential)       │ (3, 17)                │         2,257 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ sequential_2 (Sequential)       │ (3, 17)                │         1,137 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ dense_7 (Dense)                 │ (3, 1)                 │            18 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ finish (Dense)                  │ (3, 1)                 │             2 │
-# ├─────────────────────────────────┼────────────────────────┼───────────────┤
-# │ like (Dense)                    │ (3, 1)                 │             2 │
-# └─────────────────────────────────┴────────────────────────┴───────────────┘
-#  Total params: 8,060 (31.48 KB)
-#  Trainable params: 8,060 (31.48 KB)
-#  Non-trainable params: 0 (0.00 B)
-# None
+        print("Dense 输入:")
+        print(dense_input)
+        print("Sparse 输入:")
+        print(sparse_input)
+        for feat in sequence_feats:
+            print(f"{feat} 输入:")
+            print(sequence_inputs[feat])
+        print("\n模型输出:")
+        print(output)
+
+        model.summary()
