@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.image
 # --- 1. 读取数据 ---
 # 定义数据集的列名并加载数据
 column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel", "finish", "like", "music_id", "device", "time", "duration_time"]
-data = pd.read_csv(r'D:\software\pycharm_repository\StarMaker\MultiRecSys\data_files\train_2.csv', sep='\t', names=column_names)
+data = pd.read_csv(r'D:\software\pycharm_repository\StarMaker\MultiRecSys\data_files\train_1.csv', sep='\t', names=column_names)
 
 
 # --- 2. 特征预处理 ---
