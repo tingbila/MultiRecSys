@@ -56,7 +56,7 @@ if __name__ == "__main__":
     data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
 
     # 2. 调用模型
-    model_name = "NFM"
+    model_name = "DeepFM_MTL"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估
