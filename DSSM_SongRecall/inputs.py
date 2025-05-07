@@ -1,7 +1,7 @@
 from itertools import chain
 from collections import defaultdict
 import sys
-sys.path.append("..")
+sys.path.append("../recall")
 from layers.utils import Hash
 
 from deepctr.feature_column import SparseFeat, VarLenSparseFeat, create_embedding_matrix, embedding_lookup, \

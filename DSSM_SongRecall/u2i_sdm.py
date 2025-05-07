@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.models import Model
 import sys
-sys.path.append("..")
+sys.path.append("../recall")
 from layers.utils import sampledsoftmaxloss, NegativeSampler
 from config.dssm_config import *
 

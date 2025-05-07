@@ -56,3 +56,4 @@ callbacks/
 
 # 忽略 Git LFS 自动追踪配置文件（可保留）
 *.gitattributes
+DSSM_SongRecall/*
