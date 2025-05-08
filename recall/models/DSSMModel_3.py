@@ -19,7 +19,9 @@ import numpy as np
 from tensorflow.keras.optimizers import Adam
 import faiss
 
-from deepctr.feature_column import SparseFeat, DenseFeat
+from deepctr.feature_column import SparseFeat, DenseFeat, VarLenSparseFeat
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
 
 
 class DSSMModel(Model):
@@ -33,7 +35,7 @@ class DSSMModel(Model):
                  seed=1024, metric='cos'):
         super(DSSMModel, self).__init__()
 
-        print(user_feature_columns,item_feature_columns)
+        # print(user_feature_columns,item_feature_columns)
         # 保存输入特征列和正则化超参数
         self.user_feature_columns = user_feature_columns  # [SparseFeat('user_id', vocabulary_size=10, embedding_dim=8)]
         self.item_feature_columns = item_feature_columns  # [SparseFeat('item_id', vocabulary_size=20, embedding_dim=8)]
@@ -53,8 +55,8 @@ class DSSMModel(Model):
         # 变长序列特征（VarLenSparseFeat）对应的是Input(shape=(10,), dtype='int32', name='hist_item_id') 序列的长度
         self.user_input_features = build_input_features(user_feature_columns)
         self.item_input_features = build_input_features(item_feature_columns)
-        print(self.user_input_features)
-        print(self.item_input_features)
+        # print(self.user_input_features)
+        # print(self.item_input_features)
         # [SparseFeat(name='user_id', vocabulary_size=10, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C5878700>, embedding_name='user_id', group_name='default_group', trainable=True), DenseFeat(name='user_age', dimension=1, dtype='float32', transform_fn=None)]
         # [SparseFeat(name='item_id', vocabulary_size=20, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C59B5DC0>, embedding_name='item_id', group_name='default_group', trainable=True), DenseFeat(name='item_price', dimension=1, dtype='float32', transform_fn=None)]
 
@@ -113,25 +115,29 @@ class DSSMModel(Model):
         user_sparse_embedding_list, user_dense_value_list = input_from_feature_columns(
             user_inputs, self.user_feature_columns, self.l2_reg_embedding,
             support_dense=True, seed=1024
-        )
-        # print(user_sparse_embedding_list,user_dense_value_list) # [shape=(4, 8),shape=(4,)]
+        )   # print(user_sparse_embedding_list, user_dense_value_list) # [shape=(4, 8),shape=(4, 1, 8),shape=(4,)]
+        # 如果有形状为 [4, 1, 8] 的张量，移除额外的维度，使其变为 [4, 8]
+        user_sparse_embedding_list = [tf.squeeze(embed, axis=1) if embed.shape[1] == 1 else embed for embed in user_sparse_embedding_list]
+
 
         item_sparse_embedding_list, item_dense_value_list = input_from_feature_columns(
             item_inputs, self.item_feature_columns, self.l2_reg_embedding,
             support_dense=True, seed=1024
-        )
-        # print(item_sparse_embedding_list, item_dense_value_list) # [shape=(4, 8),shape=(4,)]
+        )  # print(item_sparse_embedding_list, item_dense_value_list)  # [shape=(4, 8),shape=(4, 1, 8),shape=(4,)]
+        # 如果有形状为 [4, 1, 8] 的张量，移除额外的维度，使其变为 [4, 8]
+        item_sparse_embedding_list = [tf.squeeze(embed, axis=1) if embed.shape[1] == 1 else embed for embed in item_sparse_embedding_list]
+
 
         # 拼接稀疏嵌入和稠密特征，作为 DNN 输入:可以理解为将离散特征的Embedding向量和连续特征进行concat
         user_dnn_input = combined_dnn_input(user_sparse_embedding_list, user_dense_value_list)
         item_dnn_input = combined_dnn_input(item_sparse_embedding_list, item_dense_value_list)
-        # print(user_dnn_input.shape)  # (4, 9)
-        # print(item_dnn_input.shape)  # (4, 9)
+        # print(user_dnn_input.shape)  # (4, 17)
+        # print(item_dnn_input.shape)  # (4, 17)
 
         # 通过用户和物品 DNN 获得表示向量
         user_dnn_output = self.user_dnn(user_dnn_input, training=training)
         item_dnn_output = self.item_dnn(item_dnn_input, training=training)
-        print(user_dnn_output.shape,item_dnn_output.shape)  # (4, 32) (4, 32)
+        # print(user_dnn_output.shape,item_dnn_output.shape)  # (4, 32) (4, 32)
 
         # 计算相似度分数（如余弦）
         score = self.cosine_similarity(user_dnn_output, item_dnn_output)
@@ -149,15 +155,17 @@ class DSSMModel(Model):
 
 
 if __name__ == '__main__':
-    # 定义用户和物品特征列，使用 SparseFeat（稀疏离散特征）和 DenseFeat（连续特征）
+    # 定义用户和物品特征列，使用 SparseFeat（稀疏离散特征）、DenseFeat（连续特征）和 VarLenSparseFeat（变长序列特征）
     user_feature_columns = [
         SparseFeat('user_id', vocabulary_size=10, embedding_dim=8),
         DenseFeat('user_age', 1),  # 连续特征：用户年龄
+        VarLenSparseFeat(SparseFeat('user_history', vocabulary_size=20, embedding_dim=8), maxlen=5)  # 用户的历史浏览物品（变长序列）
     ]
 
     item_feature_columns = [
         SparseFeat('item_id', vocabulary_size=20, embedding_dim=8),
         DenseFeat('item_price', 1),  # 连续特征：物品价格
+        VarLenSparseFeat(SparseFeat('item_tags', vocabulary_size=30, embedding_dim=8), maxlen=3)  # 物品的标签（变长序列）
     ]
 
     print(user_feature_columns)
@@ -166,14 +174,26 @@ if __name__ == '__main__':
     # 构造输入数据
     user_model_input = {
         'user_id': np.array([1, 2, 3, 4]),
-        'user_age': np.array([25, 30, 22, 28], dtype=np.float32)  # 连续特征：用户年龄, 确保是 float32 类型
+        'user_age': np.array([25, 30, 22, 28], dtype=np.float32),  # 连续特征：用户年龄
+        'user_history': pad_sequences([[1, 3, 4], [5, 6, 7, 8], [9], [10, 11, 12]], maxlen=5, padding='post', value=0)
+        # 用户历史浏览物品（变长序列）
     }
-
+    # {'user_id': array([1, 2, 3, 4]), 'user_age': array([25., 30., 22., 28.], dtype=float32),
+    #  'user_history': array([[1, 3, 4, 0, 0],
+    #                         [5, 6, 7, 8, 0],
+    #                         [9, 0, 0, 0, 0],
+    #                         [10, 11, 12, 0, 0]])}
     item_model_input = {
         'item_id': np.array([10, 11, 12, 13]),
-        'item_price': np.array([100, 200, 150, 175], dtype=np.float32)  # 连续特征：物品价格, 确保是 float32 类型
+        'item_price': np.array([100, 200, 150, 175], dtype=np.float32),  # 连续特征：物品价格
+        'item_tags': pad_sequences([[15, 17], [18, 20, 21], [22, 23], [24, 25]], maxlen=3, padding='post', value=0)
+        # 物品标签（变长序列）
     }
-
+    # {'item_id': array([10, 11, 12, 13]), 'item_price': array([100., 200., 150., 175.], dtype=float32),
+    #  'item_tags': array([[15, 17, 0],
+    #                      [18, 20, 21],
+    #                      [22, 23, 0],
+    #                      [24, 25, 0]])}
     labels = np.array([1, 0, 1, 0])
 
     print(user_model_input)
