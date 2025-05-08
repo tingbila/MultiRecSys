@@ -118,99 +118,122 @@ if __name__ == "__main__":
     history = model.fit(train_model_input, train_label,  # train_label,
                         batch_size=batch_size, epochs=epoch, verbose=1, validation_split=validation_split, )
 
-    # 4. Generate user features for testing and full item features for retrieval
-    test_user_model_input = test_user_input
-    all_item_model_input = test_item_input
 
-    user_embedding_model = Model(inputs=model.user_input, outputs=model.user_embedding)
-    item_embedding_model = Model(inputs=model.item_input, outputs=model.item_embedding)
+    # history = model.fit(train_model_input, train_label,  # train_label,
+    #                     batch_size=batch_size, epochs=100, verbose=1, validation_split=validation_split, )
 
-    user_embs = user_embedding_model.predict(test_user_model_input, batch_size=2 ** 12)
-    item_embs = item_embedding_model.predict(all_item_model_input, batch_size=2 ** 12)
-
-    print(user_embs.shape)
-    print(item_embs.shape[1])
-    user_embs_size = user_embs.shape[1]
-
-    # 5. [Optional] ANN search by faiss  and evaluate the result
-
-    test_true_label = {line[0]: [line[2]] for line in test_set}
+    # 直接使用模型进行预测，获取输出
+    # test_user_model_input = test_user_input
+    # all_item_model_input = test_item_input
+    # #
+    # # # 使用 model.predict() 直接获得预测结果，或者嵌入层
+    # # predictions = model.predict([test_user_model_input, all_item_model_input], batch_size=2 ** 12)
     #
+    # # 假设你需要将输入格式化为字典形式
+    # input_data = {
+    #     'user_input': test_user_model_input,  # 用户数据
+    #     'item_input': all_item_model_input  # 物品数据
+    # }
+    #
+    # # 直接通过 model.predict 传入字典形式的输入
+    # predictions = model.predict(input_data, batch_size=2 ** 12)
+    #
+    # # 打印预测结果
+    # print(predictions.shape)
 
-
-    import faiss
-    index = faiss.IndexFlatIP(user_embs_size)
-    # faiss.normalize_L2(item_embs)
-    index.add(item_embs)
-    # faiss.normalize_L2(user_embs)
-    D, I = index.search(user_embs, FLAGS.pred_topk)
-
-    hot_10 = []
-    hot_50 = []
-    hot_hit = 0
-    hot_count = 0
-    recall_50 = []
-    recall_10 = []
-    hit = 0
-    print(len(test_user_model_input['user_id']))
-    print(item_ids['sm_id'].values[I[0][0]])
-    # f = open(FLAGS.save_dir, 'w')
-
-    c_top100 = 0
-    for i, uid in tqdm(enumerate(test_user_model_input['user_id'])):
-        try:
-            pred = [item_ids['sm_id'].values[x] for x in I[i]]
-            #print(1)
-            filter_item = None
-            rec_10 = recall_N(test_true_label[uid], pred, N=10)
-            rec_50 = recall_N(test_true_label[uid], pred, N=FLAGS.recall_topk)
-            # print(2)
-
-            # recall_10.append(rec_10)
-            # recall_50.append(rec_50)
-            # if test_true_label[uid] in pred:
-            #    hit += 1
-
-            for lab in test_true_label[uid]:
-                if lab in hot_ids:
-                    hot_10.append(rec_10)
-                    hot_50.append(rec_50)
-                    hot_count += 1
-                else:
-                    recall_10.append(rec_10)
-                    recall_50.append(rec_50)
-            # print(1)
-            for lab in test_true_label[uid]:
-                if lab in pred:
-                    if lab in hot_ids:
-                        hot_hit += 1
-                    else:
-                        hit += 1
-            '''
-            his_item = set(history_items[uid])
-            pred = [item_ids['sm_id'].values[x] - 1 for x in I[i] if item_ids['sm_id'].values[x] not in his_item]
-            if len(pred) < 100:
-                c_top100 += 1
-            user_orgin = encoder[0].inverse_transform([uid - 1])   # 特征处理之前的uid
-            item_orgin = [str(x) for x in encoder[1].inverse_transform(pred)]    # 特征处理之前的item_id
-            f.write(str(user_orgin[0]) + "\t" + ','.join(item_orgin) + '\n')
-            # break
-            '''
-        except Exception as e:
-            print(i, e)
-            continue
-            # break
-    # f.close()
-
-    print("hot_10", np.mean(hot_10))
-    print("hot_50", np.mean(hot_50))
-    print("hr", hit / max(1, hot_count))
-    print(hot_count)
-
-    print("recall_10", np.mean(recall_10))
-    print("recall_50", np.mean(recall_50))
-    print("hr", hit / len(test_user_model_input['user_id']))
-    print("pret less 100: ", c_top100)
+    # # 4. Generate user features for testing and full item features for retrieval
+    # test_user_model_input = test_user_input
+    # all_item_model_input = test_item_input
+    #
+    # user_embedding_model = Model(inputs=model.user_input, outputs=model.user_embedding)
+    # item_embedding_model = Model(inputs=model.item_input, outputs=model.item_embedding)
+    #
+    # user_embs = user_embedding_model.predict(test_user_model_input, batch_size=2 ** 12)
+    # item_embs = item_embedding_model.predict(all_item_model_input, batch_size=2 ** 12)
+    #
+    # print(user_embs.shape)
+    # print(item_embs.shape[1])
+    # user_embs_size = user_embs.shape[1]
+    #
+    # # 5. [Optional] ANN search by faiss  and evaluate the result
+    #
+    # test_true_label = {line[0]: [line[2]] for line in test_set}
+    # #
+    #
+    #
+    # import faiss
+    # index = faiss.IndexFlatIP(user_embs_size)
+    # # faiss.normalize_L2(item_embs)
+    # index.add(item_embs)
+    # # faiss.normalize_L2(user_embs)
+    # D, I = index.search(user_embs, FLAGS.pred_topk)
+    #
+    # hot_10 = []
+    # hot_50 = []
+    # hot_hit = 0
+    # hot_count = 0
+    # recall_50 = []
+    # recall_10 = []
+    # hit = 0
+    # print(len(test_user_model_input['user_id']))
+    # print(item_ids['sm_id'].values[I[0][0]])
+    # # f = open(FLAGS.save_dir, 'w')
+    #
+    # c_top100 = 0
+    # for i, uid in tqdm(enumerate(test_user_model_input['user_id'])):
+    #     try:
+    #         pred = [item_ids['sm_id'].values[x] for x in I[i]]
+    #         #print(1)
+    #         filter_item = None
+    #         rec_10 = recall_N(test_true_label[uid], pred, N=10)
+    #         rec_50 = recall_N(test_true_label[uid], pred, N=FLAGS.recall_topk)
+    #         # print(2)
+    #
+    #         # recall_10.append(rec_10)
+    #         # recall_50.append(rec_50)
+    #         # if test_true_label[uid] in pred:
+    #         #    hit += 1
+    #
+    #         for lab in test_true_label[uid]:
+    #             if lab in hot_ids:
+    #                 hot_10.append(rec_10)
+    #                 hot_50.append(rec_50)
+    #                 hot_count += 1
+    #             else:
+    #                 recall_10.append(rec_10)
+    #                 recall_50.append(rec_50)
+    #         # print(1)
+    #         for lab in test_true_label[uid]:
+    #             if lab in pred:
+    #                 if lab in hot_ids:
+    #                     hot_hit += 1
+    #                 else:
+    #                     hit += 1
+    #         '''
+    #         his_item = set(history_items[uid])
+    #         pred = [item_ids['sm_id'].values[x] - 1 for x in I[i] if item_ids['sm_id'].values[x] not in his_item]
+    #         if len(pred) < 100:
+    #             c_top100 += 1
+    #         user_orgin = encoder[0].inverse_transform([uid - 1])   # 特征处理之前的uid
+    #         item_orgin = [str(x) for x in encoder[1].inverse_transform(pred)]    # 特征处理之前的item_id
+    #         f.write(str(user_orgin[0]) + "\t" + ','.join(item_orgin) + '\n')
+    #         # break
+    #         '''
+    #     except Exception as e:
+    #         print(i, e)
+    #         continue
+    #         # break
+    # # f.close()
+    #
+    # print("hot_10", np.mean(hot_10))
+    # print("hot_50", np.mean(hot_50))
+    # print("hr", hit / max(1, hot_count))
+    # print(hot_count)
+    #
+    # print("recall_10", np.mean(recall_10))
+    # print("recall_50", np.mean(recall_50))
+    # print("hr", hit / len(test_user_model_input['user_id']))
+    # print("pret less 100: ", c_top100)
 
 
 
