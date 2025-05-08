@@ -19,6 +19,9 @@ import numpy as np
 from tensorflow.keras.optimizers import Adam
 import faiss
 
+from deepctr.feature_column import SparseFeat, DenseFeat
+
+
 class DSSMModel(Model):
     """
     基于 DeepCTR 的 DSSM 实现，用于计算用户与物品向量之间的相似度（如余弦相似度），适合推荐/匹配场景。
@@ -50,10 +53,11 @@ class DSSMModel(Model):
         # 变长序列特征（VarLenSparseFeat）对应的是Input(shape=(10,), dtype='int32', name='hist_item_id') 序列的长度
         self.user_input_features = build_input_features(user_feature_columns)
         self.item_input_features = build_input_features(item_feature_columns)
-        # print(self.user_input_features)
-        # print(self.item_input_features)
-        # OrderedDict([('user_id', <KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'user_id')>)])
-        # OrderedDict([('item_id', <KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'item_id')>)])
+        print(self.user_input_features)
+        print(self.item_input_features)
+        # [SparseFeat(name='user_id', vocabulary_size=10, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C5878700>, embedding_name='user_id', group_name='default_group', trainable=True), DenseFeat(name='user_age', dimension=1, dtype='float32', transform_fn=None)]
+        # [SparseFeat(name='item_id', vocabulary_size=20, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C59B5DC0>, embedding_name='item_id', group_name='default_group', trainable=True), DenseFeat(name='item_price', dimension=1, dtype='float32', transform_fn=None)]
+
 
         # 构建用户和物品 DNN 模块（共享结构也可根据需要共享）
         # l2_reg 是 L2 正则化（L2 regularization），用于防止 神经网络过拟合。在 DNN 里，它会对 每一层的权重参数 加一个正则项（惩罚项）来控制模型复杂度
@@ -91,8 +95,10 @@ class DSSMModel(Model):
         # 将输入拆分为用户和物品部分
         user_inputs = {k: inputs[k] for k in self.user_input_features}
         item_inputs = {k: inputs[k] for k in self.item_input_features}
-        # print(user_inputs)   {'user_id': < tf.Tensor: shape = (4,), dtype = int32, numpy = array([1, 2, 3, 4]) >}
-        # print(item_inputs)   {'item_id': < tf.Tensor: shape = (4,), dtype = int32, numpy = array([10, 11, 12, 13]) >}
+        # print(user_inputs)
+        # print(item_inputs)
+        # {'user_id': array([1, 2, 3, 4]), 'user_age': array([25., 30., 22., 28.], dtype=float32)}
+        # {'item_id': array([10, 11, 12, 13]), 'item_price': array([100., 200., 150., 175.], dtype=float32)}
 
         # 获取嵌入和数值特征列表，支持稠密特征，添加 L2 正则项
         # user_sparse_embedding_list, user_dense_value_list = input_from_feature_columns(
@@ -108,26 +114,24 @@ class DSSMModel(Model):
             user_inputs, self.user_feature_columns, self.l2_reg_embedding,
             support_dense=True, seed=1024
         )
-        # print(user_sparse_embedding_list,user_dense_value_list) # shape=(4, 8)
+        # print(user_sparse_embedding_list,user_dense_value_list) # [shape=(4, 8),shape=(4,)]
 
         item_sparse_embedding_list, item_dense_value_list = input_from_feature_columns(
             item_inputs, self.item_feature_columns, self.l2_reg_embedding,
             support_dense=True, seed=1024
         )
-        print(item_sparse_embedding_list, item_dense_value_list) # shape=(4, 8)
+        # print(item_sparse_embedding_list, item_dense_value_list) # [shape=(4, 8),shape=(4,)]
 
-        # 拼接稀疏嵌入和稠密特征，作为 DNN 输入
+        # 拼接稀疏嵌入和稠密特征，作为 DNN 输入:可以理解为将离散特征的Embedding向量和连续特征进行concat
         user_dnn_input = combined_dnn_input(user_sparse_embedding_list, user_dense_value_list)
         item_dnn_input = combined_dnn_input(item_sparse_embedding_list, item_dense_value_list)
-        # print(user_dnn_input.shape)
-        # print(item_dnn_input.shape)
-        # (4, 8)
-        # (4, 8)
+        # print(user_dnn_input.shape)  # (4, 9)
+        # print(item_dnn_input.shape)  # (4, 9)
 
         # 通过用户和物品 DNN 获得表示向量
         user_dnn_output = self.user_dnn(user_dnn_input, training=training)
         item_dnn_output = self.item_dnn(item_dnn_input, training=training)
-        # print(user_dnn_output.shape,item_dnn_output.shape)  # (4, 32) (4, 32)
+        print(user_dnn_output.shape,item_dnn_output.shape)  # (4, 32) (4, 32)
 
         # 计算相似度分数（如余弦）
         score = self.cosine_similarity(user_dnn_output, item_dnn_output)
@@ -145,16 +149,33 @@ class DSSMModel(Model):
 
 
 if __name__ == '__main__':
-    # 定义用户和物品特征列，使用 SparseFeat（稀疏离散特征）
-    user_feature_columns = [SparseFeat('user_id', vocabulary_size=10, embedding_dim=8)]
-    item_feature_columns = [SparseFeat('item_id', vocabulary_size=20, embedding_dim=8)]
+    # 定义用户和物品特征列，使用 SparseFeat（稀疏离散特征）和 DenseFeat（连续特征）
+    user_feature_columns = [
+        SparseFeat('user_id', vocabulary_size=10, embedding_dim=8),
+        DenseFeat('user_age', 1),  # 连续特征：用户年龄
+    ]
+
+    item_feature_columns = [
+        SparseFeat('item_id', vocabulary_size=20, embedding_dim=8),
+        DenseFeat('item_price', 1),  # 连续特征：物品价格
+    ]
+
     print(user_feature_columns)
     print(item_feature_columns)
 
     # 构造输入数据
-    user_model_input = {'user_id': np.array([1, 2, 3, 4])}
-    item_model_input = {'item_id': np.array([10, 11, 12, 13])}
+    user_model_input = {
+        'user_id': np.array([1, 2, 3, 4]),
+        'user_age': np.array([25, 30, 22, 28], dtype=np.float32)  # 连续特征：用户年龄, 确保是 float32 类型
+    }
+
+    item_model_input = {
+        'item_id': np.array([10, 11, 12, 13]),
+        'item_price': np.array([100, 200, 150, 175], dtype=np.float32)  # 连续特征：物品价格, 确保是 float32 类型
+    }
+
     labels = np.array([1, 0, 1, 0])
+
     print(user_model_input)
     print(item_model_input)
     print(labels)
@@ -170,13 +191,10 @@ if __name__ == '__main__':
     print("预测输出：", outputs.numpy())
 
     # 输出用户和物品的向量（可以用于向量检索）
-    # 为什么要将 DNN 的输出作为用户和物品的特征向量，这是理解 DSSM（Deep Structured Semantic Model） 或基于向量检索推荐系统的核心之一
-    # DSSM 的目标是学习一个共同的语义空间，把用户和物品映射为向量，使得相关的 user-item 向量更相似（如余弦相似度更高）
     user_embeddings = model.user_embedding.numpy()
     item_embeddings = model.item_embedding.numpy()
-    print("User Embedding:\n", user_embeddings.shape)  #  (4, 32)
-    print("Item Embedding:\n", item_embeddings.shape)  #  (4, 32)
-
+    print("User Embedding:\n", user_embeddings.shape)  # (4, 32)
+    print("Item Embedding:\n", item_embeddings.shape)  # (4, 32)
 
 
     # -------------------------- 基于余弦相似度获取user的相似item --------------------------
