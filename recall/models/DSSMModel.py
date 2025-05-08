@@ -15,6 +15,12 @@ from deepctr.layers.utils import combined_dnn_input
 from deepctr.layers.core import PredictionLayer
 
 import tensorflow as tf
+# 启用即时执行（eager execution） 如果不添加下面的参数，会报错： ValueError: tf.function-decorated function tried to create variables on non-first call.
+# 对于 召回 阶段的任务，性能要求通常没有排序（Rank）或在线服务阶段那么高，因为召回更多是在训练过程中进行的。你可以在训练时先开启 Eager Execution，确保模型的正确性，并进行逐步优化。
+tf.config.experimental_run_functions_eagerly(True)
+tf.data.experimental.enable_debug_mode()
+
+
 import numpy as np
 from tensorflow.keras.optimizers import Adam
 import faiss
