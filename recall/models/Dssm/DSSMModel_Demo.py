@@ -7,21 +7,17 @@
 # -- document:
 # ------------------------------------------------------------------------------
 
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import log_loss, roc_auc_score
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Embedding, Dense, Flatten, Concatenate
-from tensorflow.keras.models import Model
-import tensorflow.keras.backend as K
-from DSSMModel import DSSMModel
+from recall.models.Dssm.DSSMModel import DSSMModel
 
 import matplotlib
 matplotlib.use('TkAgg')  # 或者 'QtAgg'，看你电脑支持哪个
-from deepctr.feature_column import SparseFeat, DenseFeat, VarLenSparseFeat
+from deepctr.feature_column import SparseFeat, DenseFeat
 
 
 def process_dense_feats(data, feats):
@@ -43,7 +39,7 @@ def process_sparse_feats(data, feats):
 
 def load_and_process_data():
     column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel", "finish", "like", "music_id", "device", "time", "duration_time", "actors", "genres"]
-    data = pd.read_csv("D:\\software\\pycharm_repository\\StarMaker\\MultiRecSys\\data_files\\train_2.csv", sep='\t', names=column_names)
+    data = pd.read_csv("/data_files/train_2.csv", sep='\t', names=column_names)
 
     sparse_feats_user = ["uid", "user_city", "device"]
     sparse_feats_item = ["item_id", "author_id", "item_city", "channel", "music_id"]

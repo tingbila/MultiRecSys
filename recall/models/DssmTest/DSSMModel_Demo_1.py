@@ -42,7 +42,7 @@ def process_sparse_feats(data, feats):
 
 def load_and_process_data():
     column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","finish", "like", "music_id", "device", "time", "duration_time", "actors", "genres"]
-    data = pd.read_csv(r"D:\\software\\pycharm_repository\\StarMaker\\MultiRecSys\\data_files\\train_2.csv",sep='\t', names=column_names)
+    data = pd.read_csv(r"/data_files/train_2.csv", sep='\t', names=column_names)
 
     sparse_feats_user = ["uid", "user_city", "device"]
     sparse_feats_item = ["item_id", "author_id", "item_city", "channel", "music_id"]
