@@ -10,7 +10,7 @@
 
 from tensorflow.keras.models import Model
 from deepctr.layers.core import DNN
-from deepctr.feature_column import build_input_features, input_from_feature_columns, SparseFeat
+from deepctr.feature_column import build_input_features, input_from_feature_columns, SparseFeat, create_embedding_matrix
 from deepctr.layers.utils import combined_dnn_input
 from deepctr.layers.core import PredictionLayer
 
@@ -35,6 +35,12 @@ class DSSMModel(Model):
         self.user_feature_columns = user_feature_columns  # [SparseFeat('user_id', vocabulary_size=10, embedding_dim=8)]
         self.item_feature_columns = item_feature_columns  # [SparseFeat('item_id', vocabulary_size=20, embedding_dim=8)]
         self.l2_reg_embedding = l2_reg_embedding
+
+        # 在DeepCTR的更新版本中，embedding_matrix_dict参数已经被移除。embedding_matrix_dict是用来初始化预训练的嵌入矩阵的，但
+        # DeepCTR现在的设计中会自动处理嵌入矩阵的初始化。因此，你不需要再手动传入embedding_matrix_dict
+        # self.embedding_matrix_dict = create_embedding_matrix(user_feature_columns + item_feature_columns, l2_reg_embedding,
+        #                                                 seed=seed,
+        #                                                 seq_mask_zero=True)
 
         # 构建用户和物品的输入特征字典（用于 Keras Functional API）
         # build_input_features(feature_columns) 会根据传入的特征列（如 SparseFeat, DenseFeat 等）自动生成对应的 tf.keras.Input 层，并返回一个字典，key 是特征名，value 是输入层张量
@@ -96,7 +102,8 @@ class DSSMModel(Model):
         #     support_dense=True,         # 是否支持稠密（连续数值）特征
         #     seed=1024                   # 随机种子，保证可重复
         # )
-        # 于每个 DenseFeat（连续特征）：直接将原始值从 user_inputs 中取出，不做变换
+        # 于每个 DenseFeat（连续特征）：直接将原始值从 user_inputs 中取出，不做变换，
+        # 不在需要传入embedding_matrix_dict=self.embedding_matrix_dict
         user_sparse_embedding_list, user_dense_value_list = input_from_feature_columns(
             user_inputs, self.user_feature_columns, self.l2_reg_embedding,
             support_dense=True, seed=1024
