@@ -252,13 +252,24 @@ if __name__ == '__main__':
     scores, item_indices = index.search(query, k)
 
     # Step 6: 输出结果
-    print(f"用户 {user_index+1} 最相似的商品：")
+    item_ids = item_model_input['item_id']  # 获取原始 item_id 列表
+
+    print(f"用户 {user_index + 1} 最相似的商品：")
     for i in range(k):
-        print(f"商品 {item_indices[0][i]}（余弦相似度: {scores[0][i]:.4f}）")
+        index_in_item_ids = item_indices[0][i]  # 向量编号（即 item_ids 的索引）
+        real_item_id = item_ids[index_in_item_ids]  # 获取真实 item_id
+        similarity_score = scores[0][i]  # 相似度得分
+        print(f"Top {i + 1}: 向量编号 {index_in_item_ids} -> 真实商品ID {real_item_id}（余弦相似度: {similarity_score:.4f}）")
+
     # 用户 1 最相似的商品：
-    # 商品 3（余弦相似度: 0.1587）
-    # 商品 2（余弦相似度: -0.0046）
-    # 商品 0（余弦相似度: -0.0220）
-    # 商品 4（余弦相似度: -0.1411）
-    # 商品 1（余弦相似度: -0.2129）
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9720）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9634）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9606）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9584）
+    # Top 5: 向量编号 -1 -> 真实商品ID 13（余弦相似度: -340282346638528859811704183484516925440.0000）
+
+
+
+
+
 
