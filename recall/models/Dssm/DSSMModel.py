@@ -226,7 +226,7 @@ if __name__ == '__main__':
     print("Item Embedding:\n", item_embeddings.shape)  # (4, 32)
 
 
-    # -------------------------- 基于余弦相似度获取user的相似item --------------------------
+    # -------------------------- 基于余弦相似度获取user的相似item(单用户查询） --------------------------
     # 假设你已经获得 item_embeddings 和 user_embeddings，是 NumPy 数组
     # 归一化函数
     def l2_normalize(x):
@@ -269,7 +269,78 @@ if __name__ == '__main__':
     # Top 5: 向量编号 -1 -> 真实商品ID 13（余弦相似度: -340282346638528859811704183484516925440.0000）
 
 
+    # -------------------------- 基于余弦相似度获取user的相似item(所有用户查询） --------------------------
+    def l2_normalize(x):
+        return x / np.linalg.norm(x, axis=1, keepdims=True)
+
+    # Step 1: 向量归一化
+    normalized_item_embeddings = l2_normalize(item_embeddings.astype(np.float32))
+    normalized_user_embeddings = l2_normalize(user_embeddings.astype(np.float32))
+
+    # Step 2: 创建 Faiss 内积索引
+    dimension = normalized_item_embeddings.shape[1]
+    index = faiss.IndexFlatIP(dimension)  # 基于内积的索引（需配合归一化使用）
+
+    # Step 3: 添加商品向量（已归一化）
+    index.add(normalized_item_embeddings)
+
+    # Step 4: 批量查询所有用户最相似的商品（用户向量需归一化）
+    queries = normalized_user_embeddings  # 形状为 [num_users, embedding_dim]
+
+    # Step 5: 查询每个用户的 Top-K 相似商品
+    k = 5
+    scores, item_indices = index.search(queries, k)  # 批量查询，返回 shape: [num_users, k]
+
+    # Step 6: 输出结果
+    item_ids = item_model_input['item_id']  # 获取真实 item_id 列表
+    num_users = queries.shape[0]
+
+    for user_index in range(num_users):
+        print(f"\n用户 {user_index + 1} 最相似的商品：")
+        for i in range(k):
+            index_in_item_ids = item_indices[user_index][i]
+            similarity_score = scores[user_index][i]
+
+            # 检查非法索引（如 -1）
+            if index_in_item_ids == -1:
+                print(f"Top {i + 1}: 无有效相似商品")
+            else:
+                real_item_id = item_ids[index_in_item_ids]
+                print(f"Top {i + 1}: 向量编号 {index_in_item_ids} -> 真实商品ID {real_item_id}（余弦相似度: {similarity_score:.4f}）")
 
 
-
+    # 用户 1 最相似的商品：
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9720）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9634）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9606）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9584）
+    # Top 5: 向量编号 -1 -> 真实商品ID 13（余弦相似度: -340282346638528859811704183484516925440.0000）
+    #
+    # 用户 1 最相似的商品：
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9720）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9634）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9606）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9584）
+    # Top 5: 无有效相似商品
+    #
+    # 用户 2 最相似的商品：
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9796）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9716）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9689）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9668）
+    # Top 5: 无有效相似商品
+    #
+    # 用户 3 最相似的商品：
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9658）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9569）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9540）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9518）
+    # Top 5: 无有效相似商品
+    #
+    # 用户 4 最相似的商品：
+    # Top 1: 向量编号 0 -> 真实商品ID 10（余弦相似度: 0.9769）
+    # Top 2: 向量编号 2 -> 真实商品ID 12（余弦相似度: 0.9686）
+    # Top 3: 向量编号 3 -> 真实商品ID 13（余弦相似度: 0.9659）
+    # Top 4: 向量编号 1 -> 真实商品ID 11（余弦相似度: 0.9638）
+    # Top 5: 无有效相似商品
 
