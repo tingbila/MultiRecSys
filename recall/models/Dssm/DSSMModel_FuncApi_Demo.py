@@ -7,41 +7,32 @@
 # -- document:
 # ------------------------------------------------------------------------------
 
+import argparse
+import random
 import faiss
-from tensorflow.keras.models import Model
-from deepctr.layers.core import DNN
-from deepctr.feature_column import (
-    build_input_features,
-    input_from_feature_columns,
-    SparseFeat
-)
-from deepctr.layers.utils import combined_dnn_input
-from deepctr.layers.core import PredictionLayer
-
-import tensorflow as tf
 import numpy as np
+import pandas as pd
+import tensorflow as tf
+
+from tqdm import tqdm
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
-
-import tensorflow as tf
-from tensorflow.keras.models import Model
-# 启用即时执行（eager execution）
-# tf.config.experimental_run_functions_eagerly(True)
+from deepctr.feature_column import build_input_features, input_from_feature_columns, SparseFeat, VarLenSparseFeat
+from deepctr.layers.core import DNN, PredictionLayer
+from deepctr.layers.utils import combined_dnn_input
 
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-from deepctr.feature_column import SparseFeat, VarLenSparseFeat
-from tensorflow.python.keras.models import Model
-from dssm_preprocess import gen_data_set, gen_model_input, gen_test_inpout
 import numpy as np
-from tqdm import tqdm
-from utils import recall_N
-# from config.dssm_config import *
-from tensorflow.keras.layers import Lambda
 
-import random
+# 设置显示选项：不省略列、不省略行、不截断内容
+pd.set_option('display.max_columns', None)  # 显示所有列
+pd.set_option('display.max_rows', None)  # 显示所有行
+pd.set_option('display.max_colwidth', None)  # 显示每列完整内容
+pd.set_option('display.expand_frame_repr', False)  # 不自动换行显示DataFrame
 
-import argparse
+import matplotlib.pyplot as plt
 
 def cosine_similarity(a, b):
     """
