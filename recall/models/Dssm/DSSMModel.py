@@ -63,11 +63,14 @@ class DSSMModel(Model):
         self.item_input_features = build_input_features(item_feature_columns)
         # print(self.user_input_features)
         # print(self.item_input_features)
-        # [SparseFeat(name='user_id', vocabulary_size=10, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C5878700>, embedding_name='user_id', group_name='default_group', trainable=True), DenseFeat(name='user_age', dimension=1, dtype='float32', transform_fn=None)]
-        # [SparseFeat(name='item_id', vocabulary_size=20, embedding_dim=8, use_hash=False, vocabulary_path=None, dtype='int32', embeddings_initializer=<tensorflow.python.keras.initializers.initializers_v1.RandomNormal object at 0x00000296C59B5DC0>, embedding_name='item_id', group_name='default_group', trainable=True), DenseFeat(name='item_price', dimension=1, dtype='float32', transform_fn=None)]
+        # print(list(self.user_input_features.values()))
+        # print(list(self.item_input_features.values()))
 
+        # OrderedDict([('user_id', <KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'user_id')>), ('user_age', <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'user_age')>), ('user_history', <KerasTensor: shape=(None, 5) dtype=int32 (created by layer 'user_history')>)])
+        # OrderedDict([('item_id', <KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'item_id')>), ('item_price', <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'item_price')>), ('item_tags', <KerasTensor: shape=(None, 3) dtype=int32 (created by layer 'item_tags')>)])
+        # [<KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'user_id')>, <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'user_age')>, <KerasTensor: shape=(None, 5) dtype=int32 (created by layer 'user_history')>]
+        # [<KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'item_id')>, <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'item_price')>, <KerasTensor: shape=(None, 3) dtype=int32 (created by layer 'item_tags')>]        # 构建用户和物品 DNN 模块（共享结构也可根据需要共享）
 
-        # 构建用户和物品 DNN 模块（共享结构也可根据需要共享）
         # l2_reg 是 L2 正则化（L2 regularization），用于防止 神经网络过拟合。在 DNN 里，它会对 每一层的权重参数 加一个正则项（惩罚项）来控制模型复杂度
         # l2_reg 的惩罚项 确实是体现在 loss 损失函数里，它并不会直接改变模型的输出结果，而是通过 影响损失函数 来间接调整模型的学习方向
         # loss = loss_data + λ * Σ||W||²
