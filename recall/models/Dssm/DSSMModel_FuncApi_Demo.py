@@ -22,6 +22,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras.optimizers import Adam
 
+
 import tensorflow as tf
 from tensorflow.keras.models import Model
 # 启用即时执行（eager execution）
@@ -31,20 +32,16 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from deepctr.feature_column import SparseFeat, VarLenSparseFeat
 from tensorflow.python.keras.models import Model
-# from dssm_preprocess import gen_data_set, gen_model_input, gen_test_inpout
+from dssm_preprocess import gen_data_set, gen_model_input, gen_test_inpout
 import numpy as np
 from tqdm import tqdm
-# from utils import recall_N
+from utils import recall_N
 # from config.dssm_config import *
 from tensorflow.keras.layers import Lambda
 
 import random
 
 import argparse
-
-def recall_N(y_true, y_pred, N=50):
-    return len(set(y_pred[:N]) & set(y_true)) * 1.0 / len(y_true)
-
 
 def cosine_similarity(a, b):
     """
@@ -58,10 +55,10 @@ def cosine_similarity(a, b):
 
 
 def DSSM(user_feature_columns, item_feature_columns,
-         user_dnn_hidden_units=(64, 32), item_dnn_hidden_units=(64, 32),
-         dnn_activation='tanh', dnn_use_bn=False,
-         l2_reg_dnn=0, l2_reg_embedding=1e-6, dnn_dropout=0,
-         seed=1024, metric='cos'):
+              user_dnn_hidden_units=(64, 32), item_dnn_hidden_units=(64, 32),
+              dnn_activation='tanh', dnn_use_bn=False,
+              l2_reg_dnn=0, l2_reg_embedding=1e-6, dnn_dropout=0,
+              seed=1024, metric='cos'):
     """
     构建 DSSM（Deep Structured Semantic Model）模型，支持用户塔和物品塔的分离 DNN 网络建模。
 
@@ -110,6 +107,7 @@ def DSSM(user_feature_columns, item_feature_columns,
     item_dnn_input = combined_dnn_input(item_sparse_embedding_list, item_dense_value_list)
     # print(item_dnn_input) # KerasTensor(type_spec=TensorSpec(shape=(None, 17), dtype=tf.float32, name=None), name='concat_3/concat:0', description="created by layer 'concat_3'")
 
+
     # 7. 用户塔：使用多层 DNN 进行建模，输出用户向量
     user_dnn_out = DNN(user_dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
                        dnn_use_bn, seed=seed)(user_dnn_input)
@@ -133,22 +131,23 @@ def DSSM(user_feature_columns, item_feature_columns,
     model = Model(inputs=user_inputs_list + item_inputs_list, outputs=output)
 
     # 12. 绑定模型内部的中间向量（便于后续访问）
-    model.__setattr__("user_input", user_inputs_list)  # 用户原始输入层
-    model.__setattr__("item_input", item_inputs_list)  # 物品原始输入层
-    model.__setattr__("user_embedding", user_dnn_out)  # 用户向量
-    model.__setattr__("item_embedding", item_dnn_out)  # 物品向量
+    model.__setattr__("user_input", user_inputs_list)    # 用户原始输入层
+    model.__setattr__("item_input", item_inputs_list)    # 物品原始输入层
+    model.__setattr__("user_embedding", user_dnn_out)    # 用户向量
+    model.__setattr__("item_embedding", item_dnn_out)    # 物品向量
 
     return model
+
+
+
+
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="DSSM Recommendation System Parameters")
 
-    parser.add_argument("--data_dir", type=str,
-                        default=r"D:\software\pycharm_repository\StarMaker\MultiRecSys\data_files\dssm_data_2.csv",
-                        help="原始输入数据路径")
-    parser.add_argument("--data_final_dir", type=str,
-                        default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_finash.csv", help="最终处理后的数据路径")
+    parser.add_argument("--data_dir", type=str, default=r"D:\software\pycharm_repository\StarMaker\MultiRecSys\data_files\dssm_data_2.csv",help="原始输入数据路径")
+    parser.add_argument("--data_final_dir", type=str,default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_finash.csv", help="最终处理后的数据路径")
 
     parser.add_argument("--seq_len", type=int, default=15, help="用户历史序列的最大长度")
     parser.add_argument("--min_count", type=int, default=5, help="商品被点击的最小次数（过滤低频）")
@@ -161,16 +160,11 @@ def parse_args():
     parser.add_argument("--pred_topk", type=int, default=200, help="召回预测时选取的 Top-K 数量")
     parser.add_argument("--recall_topk", type=int, default=3, help="评估时的 Top-K 召回覆盖率")
 
-    parser.add_argument("--save_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_u2i.txt",
-                        help="主召回结果保存路径")
-    parser.add_argument("--save_dir_new", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_new.txt",
-                        help="新召回结果保存路径")
-    parser.add_argument("--save_sdm_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/sdm_data_u2i.txt",
-                        help="SDM 模型召回结果保存路径")
-    parser.add_argument("--save_mind_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/mind_data_u2i.txt",
-                        help="MIND 模型召回结果保存路径")
-    parser.add_argument("--save_final_dir", type=str,
-                        default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_final_u2i.txt", help="最终合并召回结果保存路径")
+    parser.add_argument("--save_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_u2i.txt",help="主召回结果保存路径")
+    parser.add_argument("--save_dir_new", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_data_new.txt",help="新召回结果保存路径")
+    parser.add_argument("--save_sdm_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/sdm_data_u2i.txt",help="SDM 模型召回结果保存路径")
+    parser.add_argument("--save_mind_dir", type=str, default="/data1/guifang.ji/DSSM_SongRecall/data/mind_data_u2i.txt",help="MIND 模型召回结果保存路径")
+    parser.add_argument("--save_final_dir", type=str,default="/data1/guifang.ji/DSSM_SongRecall/data/dssm_final_u2i.txt", help="最终合并召回结果保存路径")
 
     # ✅ 关键：让 argparse 忽略 Jupyter 注入的无关参数
     # Jupyter 会自动向 argparse 传入 notebook 的内部参数（比如 -f kernel-xxx.json），而你没有设置接受这些参数，所以报错
@@ -258,34 +252,6 @@ def gen_model_input(train_set, user_profile, item_profile, seq_max_len):
     return train_model_input, train_label
 
 
-def gen_test_inpout(train_set, user_profile, item_profile, item_ids, seq_max_len):
-    train_uid = np.array([line[0] for line in train_set])
-    train_seq = [line[1] for line in train_set]
-    train_iid = item_ids['sm_id'].values
-    train_label = np.array([line[3] for line in train_set])
-    train_hist_len = np.array([line[4] for line in train_set])
-
-    # padding
-    train_seq_pad = tf.keras.preprocessing.sequence.pad_sequences(train_seq, maxlen=seq_max_len, padding='post',
-                                                                  truncating='post', value=0)
-    # print(train_seq_pad)
-    train_user_input = {"user_id": train_uid,  "hist_sm_id": train_seq_pad, "hist_len": train_hist_len}
-
-    for key in user_fearther_noid:
-        try:
-            train_user_input[key] = user_profile.loc[train_user_input['user_id']][key].values
-        except:
-            continue
-
-    train_item_input = {"sm_id": train_iid}
-    for key in item_fearther_noid:
-        try:
-            train_item_input[key] = item_profile.loc[train_item_input['sm_id']][key].values
-        except:
-            continue
-
-    return train_user_input, train_item_input, train_label
-
 
 
 if __name__ == "__main__":
@@ -318,8 +284,7 @@ if __name__ == "__main__":
     string_header = ["user_id", "sm_id", "user_lang", "platform", "country", "song_genres"]
     time_header = ["timestamp"]
     user_fearther = ["user_id", "gender", "age", "level", "user_lang", "country", "platform", "is_new"]
-    item_fearther = ["sm_id", "artist_gender", "song_quality", "song_recording_count",
-                     "song_genres"]  # "sm_language" 90% 为空，去掉
+    item_fearther = ["sm_id", "artist_gender", "song_quality", "song_recording_count","song_genres"]  # "sm_language" 90% 为空，去掉
     user_fearther_noid = ["gender", "age", "level", "user_lang", "country", "platform", "is_new"]
     item_fearther_noid = ["artist_gender", "song_quality", "song_recording_count", "song_genres"]
 
@@ -377,6 +342,9 @@ if __name__ == "__main__":
     # {1: [120], 2: [106], 3: [99], 4: [84], 5: [122], 6: [123], 7: [80], 8: [117], 9: [72], 10: [101], 11: [44, 97, 97, 59, 63, 90], 12: [121], 13: [116], 14: [109], 15: [101], 16: [118], 17: [119], 18: [83], 19: [102], 20: [107], 21: [106], 22: [84], 23: [113], 24: [108], 25: [99], 26: [105], 27: [87], 28: [103], 29: [75], 30: [93], 31: [91], 32: [108], 33: [74], 34: [76], 35: [44], 36: [85, 85], 37: [72, 72], 38: [113], 39: [86], 40: [71], 41: [90], 42: [54], 43: [98], 44: [109], 45: [89], 46: [112], 47: [115], 48: [100], 49: [43], 50: [51], 51: [88], 52: [114], 53: [93], 54: [105], 55: [21], 56: [107], 57: [34], 58: [104], 59: [106], 60: [113], 61: [96], 62: [101], 63: [63], 64: [79], 65: [109], 66: [113], 67: [78], 68: [113], 69: [95], 70: [82], 71: [2], 72: [77], 73: [113], 74: [103, 103], 75: [73], 76: [110], 77: [98], 78: [99], 79: [113], 80: [70], 81: [92], 82: [101], 83: [87], 84: [80], 85: [113], 86: [77], 87: [111], 88: [84], 89: [109], 90: [90], 91: [94], 92: [99], 93: [81], 94: [6], 95: [7], 96: [37], 97: [63], 98: [69], 99: [44], 100: [48], 101: [68], 102: [49], 103: [17], 104: [45], 105: [34], 106: [67], 107: [52], 108: [24], 109: [4], 110: [42], 111: [20], 112: [8], 113: [45], 114: [59], 115: [53], 116: [45], 117: [29], 118: [56], 119: [58], 120: [65], 121: [59], 122: [43], 123: [39], 124: [34], 125: [33], 126: [44], 127: [49], 128: [5], 129: [47], 130: [11], 131: [44], 132: [39], 133: [27], 134: [17], 135: [11], 136: [22], 137: [62], 138: [55], 139: [44], 140: [32], 141: [57], 142: [59], 143: [36], 144: [41], 145: [1], 146: [45], 147: [50], 148: [18, 18], 149: [46], 150: [16], 151: [3], 152: [7], 153: [59], 154: [32], 155: [59], 156: [60], 157: [59], 158: [27], 159: [30, 30], 160: [44], 161: [34], 162: [35], 163: [6], 164: [48], 165: [48, 48], 166: [25], 167: [14], 168: [43], 169: [47], 170: [40], 171: [38], 172: [66, 66], 173: [23], 174: [28], 175: [82, 91, 120, 98, 45, 45], 176: [11], 177: [9], 178: [32], 179: [7], 180: [63], 181: [31], 182: [26, 26], 183: [63], 184: [11], 185: [12], 186: [61, 61], 187: [44], 188: [43], 189: [10], 190: [38], 191: [19], 192: [13], 193: [15], 194: [64], 195: [44], 196: [59]}
     # []
 
+
+
+
     # 处理后的特征以字典key: array的结构存储
     train_model_input, train_label = gen_model_input(train_set, user_profile, item_profile, SEQ_LEN)
     print("------------数据处理之后的结果:------------------")
@@ -391,6 +359,8 @@ if __name__ == "__main__":
     pd.set_option('display.max_rows', None)  # 显示所有行
     pd.set_option('display.max_colwidth', None)  # 显示每列完整内容
     pd.set_option('display.expand_frame_repr', False)  # 不自动换行显示DataFrame
+
+
 
     import pandas as pd
     import numpy as np
@@ -421,8 +391,7 @@ if __name__ == "__main__":
     print(df_input.head())
 
     # train_model_input, train_label               = gen_model_input(train_set, user_profile, item_profile, SEQ_LEN)
-    test_user_input, test_item_input, test_label = gen_test_inpout(test_set, user_profile, item_profile, item_ids,
-                                                                   SEQ_LEN)
+    test_user_input, test_item_input, test_label = gen_test_inpout(test_set, user_profile, item_profile, item_ids,SEQ_LEN)
 
     # # 拷贝一份输入字典，避免原地修改
     # flat_input = {}
@@ -444,9 +413,12 @@ if __name__ == "__main__":
     # # df_input['label'] = train_label
     # print(df_input)
 
+
+
     # 如果某个用户只浏览过 1 个 item，那：pos_list = [item1]  range(1, len(pos_list)) 相当于 range(1, 1)，是空的
     # 所以既不会生成训练样本，也不会生成测试样本
     # 这个用户会被完全跳过，也不会出现在 train_set、test_set 或 user_items 中
+
 
     # 2.count #unique features for each sparse field and generate feature config for sequence feature
     # 特征转化为SparseFeat
@@ -479,9 +451,10 @@ if __name__ == "__main__":
     history = model.fit(train_model_input, train_label,  # train_label,
                         batch_size=batch_size, epochs=epoch, verbose=1, validation_split=validation_split, )
 
+
     # 4. Generate user features for testing and full item features for retrieval
     test_user_model_input = test_user_input
-    test_item_model_input = test_item_input
+    test_item_model_input  = test_item_input
     print("------------->test_user_input-------------->")
     print(test_user_input)
     print("=============test_item_input============")
@@ -506,6 +479,8 @@ if __name__ == "__main__":
 
     print(user_embs.shape)  # (11, 32)
     print(item_embs.shape)  # (123, 32)
+
+
 
     # 1. Faiss 向量召回
     index = faiss.IndexFlatIP(item_embs.shape[1])
@@ -547,6 +522,9 @@ if __name__ == "__main__":
      [88 68 93]]
     """
 
+
+
+
     # 2. 构造真实标签
     for item in test_set:
         print(item)
@@ -564,10 +542,11 @@ if __name__ == "__main__":
     (175, [45, 98, 120, 91, 82], 45, 1, 5, 1)
     (182, [26], 26, 1, 1, 1)
     (186, [61], 61, 1, 1, 1)
-
+    
     # 获取每个用户实际点击的item列表
     {11: [90], 36: [85], 37: [72], 74: [103], 148: [18], 159: [30], 165: [48], 172: [66], 175: [45], 182: [26], 186: [61]
     """
+
 
     # # 3. 计算 recall
     recall_10, recall_50 = [], []
@@ -577,9 +556,9 @@ if __name__ == "__main__":
         """
         这行代码的作用是：
         对于每个用户 i 的推荐物品索引 I[i]，将这些索引映射为物品的 ID（从 item_ids 中提取），形成最终的推荐列表 pred。
-
+        
         举个例子，如果 I[i] = [2, 5, 8]，那么 pred 就是 [1003, 1006, 1009]，即推荐给用户 i 的物品 ID。
-
+        
         希望这个解释清楚了！如果还有不明白的地方，随时告诉我。
         """
         # pred = [item_ids['sm_id'].values[x] for x in I[i]]
@@ -589,7 +568,7 @@ if __name__ == "__main__":
         recall_N 是一个计算 召回率 的函数。召回率的定义是：
         Recall=推荐结果中包含的实际点击物品数实际点击的物品总数
         Recall=实际点击的物品总数推荐结果中包含的实际点击物品数​
-
+        
         具体来说，recall_N(test_true_label[uid], pred, N=10) 计算的是用户 uid 在推荐列表 pred 中的前 N=10 个物品中，实际点击物品 test_true_label[uid] 的 召回率。
         """
         rec_10 = recall_N(test_true_label[uid], pred, N=10)
