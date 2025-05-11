@@ -42,6 +42,10 @@ def cosine_similarity(a, b):
     计算两个向量之间的余弦相似度
     a, b: shape=(batch_size, embedding_dim)
     返回 shape=(batch_size, 1)
+
+    余弦相似度的定义是两个向量的夹角余弦值，即：
+    osine_similarity(a,b)=∥a∥∥b∥a⋅b​
+    在函数中，tf.nn.l2_normalize(a, axis=1) 会将每个向量归一化为单位向量（模长为1），因此点积 tf.reduce_sum(tf.multiply(a, b), axis=1) 就是它们的夹角余弦值。
     """
     a = tf.nn.l2_normalize(a, axis=1)  # 对每个向量按行归一化
     b = tf.nn.l2_normalize(b, axis=1)
