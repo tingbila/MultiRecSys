@@ -34,6 +34,8 @@ pd.set_option('display.expand_frame_repr', False)  # 不自动换行显示DataFr
 
 import matplotlib.pyplot as plt
 
+from DSSMModel_FuncApi import DSSM
+
 def cosine_similarity(a, b):
     """
     计算两个向量之间的余弦相似度
@@ -43,92 +45,6 @@ def cosine_similarity(a, b):
     a = tf.nn.l2_normalize(a, axis=1)  # 对每个向量按行归一化
     b = tf.nn.l2_normalize(b, axis=1)
     return tf.reduce_sum(tf.multiply(a, b), axis=1, keepdims=True)
-
-
-def DSSM(user_feature_columns, item_feature_columns,
-              user_dnn_hidden_units=(64, 32), item_dnn_hidden_units=(64, 32),
-              dnn_activation='tanh', dnn_use_bn=False,
-              l2_reg_dnn=0, l2_reg_embedding=1e-6, dnn_dropout=0,
-              seed=1024, metric='cos'):
-    """
-    构建 DSSM（Deep Structured Semantic Model）模型，支持用户塔和物品塔的分离 DNN 网络建模。
-
-    参数说明：
-    - user_feature_columns, item_feature_columns: 特征列定义（稀疏特征、密集特征）
-    - user_dnn_hidden_units, item_dnn_hidden_units: 用户/物品塔的 DNN 层结构
-    - dnn_activation: DNN 激活函数，如 'relu' 或 'tanh'
-    - dnn_use_bn: 是否使用 BatchNormalization
-    - l2_reg_dnn, l2_reg_embedding: DNN 和 Embedding 层的 L2 正则
-    - dnn_dropout: DNN Dropout 比例
-    - seed: 随机种子
-    - metric: 相似度函数，默认 'cos' 表示使用余弦相似度
-    """
-
-    # 1. 构建用户特征输入层（字典）
-    user_features = build_input_features(user_feature_columns)
-    # user_inputs_list： [<KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'user_id')>, <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'user_age')>, <KerasTensor: shape=(None, 5) dtype=int32 (created by layer 'user_history')>]
-    user_inputs_list = list(user_features.values())  # 提取为输入层列表
-
-    # 2. 根据用户特征列提取 embedding 向量和数值特征
-    user_sparse_embedding_list, user_dense_value_list = input_from_feature_columns(
-        user_features, user_feature_columns, l2_reg_embedding,
-        support_dense=True, seed=1024
-    )
-    # print(user_sparse_embedding_list)   # [<KerasTensor: shape=(None, 1, 8) dtype=float32 (created by layer 'sparse_emb_user_id')>, <KerasTensor: shape=(None, 1, 8) dtype=float32 (created by layer 'sequence_pooling_layer')>]
-    # print(user_dense_value_list)        # [<KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'user_age')>]
-
-    # 3. 将稀疏向量和数值特征拼接，作为用户塔 DNN 的输入
-    user_dnn_input = combined_dnn_input(user_sparse_embedding_list, user_dense_value_list)
-    # print(user_dnn_input)  # KerasTensor(type_spec=TensorSpec(shape=(None, 17), dtype=tf.float32, name=None), name='concat_1/concat:0', description="created by layer 'concat_1'")
-
-    # 4. 构建物品特征输入层
-    item_features = build_input_features(item_feature_columns)
-    # item_inputs_list: [<KerasTensor: shape=(None, 1) dtype=int32 (created by layer 'item_id')>, <KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'item_price')>, <KerasTensor: shape=(None, 3) dtype=int32 (created by layer 'item_tags')>]
-    item_inputs_list = list(item_features.values())
-
-    # 5. 根据物品特征列提取 embedding 向量和数值特征
-    item_sparse_embedding_list, item_dense_value_list = input_from_feature_columns(
-        item_features, item_feature_columns, l2_reg_embedding,
-        support_dense=True, seed=1024
-    )
-    # print(item_sparse_embedding_list)  # [<KerasTensor: shape=(None, 1, 8) dtype=float32 (created by layer 'sparse_emb_item_id')>, <KerasTensor: shape=(None, 1, 8) dtype=float32 (created by layer 'sequence_pooling_layer_1')>]
-    # print(item_dense_value_list)       # [<KerasTensor: shape=(None, 1) dtype=float32 (created by layer 'item_price')>]
-
-    # 6. 拼接物品稀疏和数值特征作为 DNN 输入
-    item_dnn_input = combined_dnn_input(item_sparse_embedding_list, item_dense_value_list)
-    # print(item_dnn_input) # KerasTensor(type_spec=TensorSpec(shape=(None, 17), dtype=tf.float32, name=None), name='concat_3/concat:0', description="created by layer 'concat_3'")
-
-
-    # 7. 用户塔：使用多层 DNN 进行建模，输出用户向量
-    user_dnn_out = DNN(user_dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
-                       dnn_use_bn, seed=seed)(user_dnn_input)
-
-    # KerasTensor(type_spec=TensorSpec(shape=(None, 32), dtype=tf.float32, name=None), name='dnn/dropout_1/Identity:0', description="created by layer 'dnn'")
-
-    # 8. 物品塔：使用多层 DNN 进行建模，输出物品向量
-    item_dnn_out = DNN(item_dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout,
-                       dnn_use_bn, seed=seed)(item_dnn_input)
-    # KerasTensor(type_spec=TensorSpec(shape=(None, 32), dtype=tf.float32, name=None), name='dnn_1/dropout_1/Identity:0', description="created by layer 'dnn_1'")
-
-    # 9. 计算用户向量和物品向量之间的相似度（默认使用 cosine）
-    score = cosine_similarity(user_dnn_out, item_dnn_out)
-    # print(score)  # KerasTensor(type_spec=TensorSpec(shape=(None, 1), dtype=tf.float32, name=None), name='tf.math.reduce_sum/Sum:0', description="created by layer 'tf.math.reduce_sum'")
-
-    # 10. 经过 sigmoid 层输出点击概率（二分类任务）
-    output = PredictionLayer("binary")(score)
-    # print(output)  # KerasTensor(type_spec=TensorSpec(shape=(None, 1), dtype=tf.float32, name=None), name='prediction_layer/Reshape:0', description="created by layer 'prediction_layer'")
-
-    # 11. 构建最终模型，输入包括用户和物品的所有输入特征
-    model = Model(inputs=user_inputs_list + item_inputs_list, outputs=output)
-
-    # 12. 绑定模型内部的中间向量（便于后续访问）
-    model.__setattr__("user_input", user_inputs_list)    # 用户原始输入层
-    model.__setattr__("item_input", item_inputs_list)    # 物品原始输入层
-    model.__setattr__("user_embedding", user_dnn_out)    # 用户向量
-    model.__setattr__("item_embedding", item_dnn_out)    # 物品向量
-
-    return model
-
 
 
 

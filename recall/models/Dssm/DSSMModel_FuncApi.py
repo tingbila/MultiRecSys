@@ -49,7 +49,7 @@ def cosine_similarity(a, b):
 
 
 
-def DSSMModel(user_feature_columns, item_feature_columns,
+def DSSM(user_feature_columns, item_feature_columns,
               user_dnn_hidden_units=(64, 32), item_dnn_hidden_units=(64, 32),
               dnn_activation='tanh', dnn_use_bn=False,
               l2_reg_dnn=0, l2_reg_embedding=1e-6, dnn_dropout=0,
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     print(labels)
 
     # 实例化模型
-    model = DSSMModel(user_feature_columns, item_feature_columns)
+    model = DSSM(user_feature_columns, item_feature_columns)
 
     # 编译模型
     model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy')
