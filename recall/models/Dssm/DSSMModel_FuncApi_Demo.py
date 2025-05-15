@@ -367,6 +367,7 @@ if __name__ == "__main__":
     print("=============test_item_input============")
     print(test_item_input)
 
+
     """
     这行代码的含义是：
     用训练好的 model 中的某些中间层（在这里是用户输入和用户 DNN 向量输出）来创建一个新的子模型；

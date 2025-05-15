@@ -95,7 +95,7 @@ def process_dense_feats(data, feats):
 def process_sparse_feats(data, feats):
     """
     对稀疏特征进行处理，填充缺失值并使用 Label Encoding 编码。
-
+    使用 LabelEncoder 的核心目的之一就是：将类别型特征转换为从 0 开始的整数索引，以便构建 embedding 矩阵时可以作为下标使用。
     参数:
     data (DataFrame): 包含特征的数据框
     feats (list): 稀疏特征的列名列表
@@ -117,13 +117,22 @@ def process_sparse_feats(data, feats):
 
 
 def process_sequence_feats(data, sequence_feats):
+    """
+    这段代码 process_sequence_feats(data, sequence_feats) 是用于处理变长序列特征（variable-length sequence features）的，常用于推荐系统或文本类模型中，
+    将某些字段中以分隔符（如英文逗号,或竖线|）分隔的多个元素转化为 稀疏整数序列（token ids），以便后续送入嵌入层或模型进行训练。
+    把 DataFrame 中的每个变长序列特征字段（如 genres, actors）从字符串表示（如 "action,comedy"）变成整数 ID 的列表（如 [2, 5]），并进行 padding（补零）
+    在 Tokenizer 的 fit_on_texts() 操作之后，相当于为每个出现过的单词分配了一个唯一的整数索引（index），这个过程就像构建了一个词表（vocabulary），
+    每个 word → id，通过tokenizer.word_index可以进行查看。
+    {'OOV': 1, '成龙': 2, '张学友': 3, '巩俐': 4, '舒淇': 5, '小李子': 6, '汤姆·哈迪': 7, '马特·达蒙': 8, '刘德华': 9, '周星驰': 10, '李连杰': 11, '艾米丽·布朗特': 12}
+    # OOV 词保留为 1（用于未见过的词）
+    """
     tokenizers = {}          # 每个变长特征对应一个独立的 Tokenizer，用于后续文本转索引
     # 遍历所有变长序列特征
     for feature in sequence_feats:
         # 将 '|' 分隔转为空格，适配 Tokenizer 格式， Tokenizer 默认是按 空格（whitespace）分割输入文本的
         texts = data[feature].fillna('').apply(lambda x: x.replace(',', ' ')).tolist()   # ['action comedy', 'drama', '', 'thriller horror']
         tokenizer = Tokenizer(oov_token='OOV')
-        tokenizer.fit_on_texts(texts)
+        tokenizer.fit_on_texts(texts) # 把所有序列填充成等长（按最长的补 0）
         sequences = tokenizer.texts_to_sequences(texts)
         # 把 NumPy 的二维数组 padded 每一行变成一个 list，然后整体作为一个新的列表赋值给 data[feature]，从而更新 DataFrame 的某一列，
         # 每个元素是一个 list（而不是一个 ndarray）

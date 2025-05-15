@@ -186,7 +186,7 @@ if __name__ == '__main__':
     print(item_model_input)
     print(labels)
 
-    # 实例化模型
+    # 实例化模型-构建model的时候不需要传入labels
     model = DSSM(user_feature_columns, item_feature_columns)
 
     # 编译模型
