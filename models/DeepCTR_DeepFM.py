@@ -10,6 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import log_loss, roc_auc_score
 from tqdm import tqdm
 from tensorflow import keras
+import os
+from tensorflow.keras.models import load_model
 
 import matplotlib
 matplotlib.use('TkAgg')  # 或者 'QtAgg'，看你电脑支持哪个
@@ -115,6 +117,7 @@ def main():
             test_model_input[feat]  = pad_sequences_dict[feat][test.index]
 
     # === 5. 构建和训练 DeepFM 模型 ===
+    from deepctr.models import DeepFM
     model = DeepFM(
         linear_feature_columns=linear_feature_columns,
         dnn_feature_columns=dnn_feature_columns,
@@ -122,16 +125,50 @@ def main():
     )
     model.compile("adagrad", "binary_crossentropy", metrics=["accuracy", keras.metrics.AUC(name='auc')])
 
+
+    # 输出目录结构
+    base_dir = r'D:\software\pycharm_repository\StarMaker\MultiRecSys\outputs'
+    log_dir = os.path.join(base_dir, 'logs')
+    callbacks_dir = os.path.join(base_dir, 'callbacks')
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(callbacks_dir, exist_ok=True)
+    output_model_file = os.path.join(callbacks_dir, 'best_model.h5')
+
+    callbacks = [
+        keras.callbacks.EarlyStopping(
+            monitor='val_loss', patience=5, restore_best_weights=True
+        ),
+        keras.callbacks.ModelCheckpoint(
+            filepath=output_model_file,
+            monitor='val_loss',
+            save_best_only=True,
+            mode='min',
+            verbose=1,
+            save_format='tf'  # 显式指定格式
+        )
+    ]
+
     history = model.fit(
         train_model_input,
         train[target].values,
         batch_size=256,
         epochs=10,
         verbose=2,
-        validation_split=0.2
+        validation_split=0.2,
+        callbacks=callbacks
     )
 
-    # === 6. 模型评估 ===
+
+
+    # === 6. 模型评估(加载训练好的模型进行测试) ===
+    from deepctr.models import DeepFM
+    model = DeepFM(
+        linear_feature_columns=linear_feature_columns,
+        dnn_feature_columns=dnn_feature_columns,
+        task='binary'
+    )
+    model.load_weights(output_model_file)  # 只加载权重，不加载结构
+    # 虽然在预测时用了batch_size=256，但是模型只是分批地处理数据，但最终会拼接每个 batch 的结果，返回一个完整的预测结果数组**
     pred_ans = model.predict(test_model_input, batch_size=256)
     print("Test LogLoss:", round(log_loss(test[target].values, pred_ans, labels=[0, 1]), 4))
     print("Test AUC:", round(roc_auc_score(test[target].values, pred_ans), 4))

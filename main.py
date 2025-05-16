@@ -4,7 +4,7 @@
 # @Author : 张明阳
 # @Email :  mingyang.zhang@ushow.media
 
-# 项目入口 main.py
+# 项目入口 main_recall.py
 # 用于训练和评估模型
 
 from datasets.data_loader import load_dataset
