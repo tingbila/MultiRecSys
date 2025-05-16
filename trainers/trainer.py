@@ -6,7 +6,7 @@
 
 from config.data_config import *
 
-# trainers/trainer.py
+# trainers/main_recall的更详细注释.py
 from tensorflow import keras
 import matplotlib.pyplot as plt
 import pandas as pd
