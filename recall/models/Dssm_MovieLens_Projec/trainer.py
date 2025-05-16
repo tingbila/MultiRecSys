@@ -306,7 +306,7 @@ def main():
     item_embedding_model = Model(inputs=model.item_input, outputs=model.item_embedding)
     构建一个从物品原始输入 → 物品 embedding 向量的模型。
     """
-    from tensorflow.keras.models import Model
+
     user_embedding_model = Model(inputs=model.user_input, outputs=model.user_embedding)
     item_embedding_model = Model(inputs=model.item_input, outputs=model.item_embedding)
     # print(user_embedding_model.summary())
