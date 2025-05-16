@@ -135,7 +135,7 @@ sequence_feats = ['actors', 'genres']
 target = ['finish']  # 推荐任务目标（预测的时候没有这列）
 
 
-# 和model训练的时候保持相同的数据预处理方式
+# 相同的数据预处理方式
 # 模型训练和预测必须 共享同一个处理器，否则数值不一致会导致预测结果错误：但是这个步骤具体怎么做，我还没有想好
 data = process_dense_feats(data, dense_feats)
 data = process_sparse_feats(data, sparse_feats)
