@@ -63,7 +63,7 @@ def process_sequence_feats(data, sequence_features):
         tokenizer = Tokenizer(oov_token='OOV')
         tokenizer.fit_on_texts(texts)
         sequences = tokenizer.texts_to_sequences(texts)
-        padded = pad_sequences(sequences, padding='post')
+        padded = pad_sequences(sequences, padding='post')  # pad_sequences(sequences, padding='post') 会自动按照最长的序列长度进行补齐
         pad_sequences_dict[feature] = padded
         tokenizers[feature] = tokenizer
         pad_len_dict[feature] = padded.shape[1]
