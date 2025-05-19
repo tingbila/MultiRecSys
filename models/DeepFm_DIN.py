@@ -96,10 +96,43 @@ class DeepFM_MTL(Model):
             layers.Dense(1)
         ])
 
+        # DIN用的注意力网络-DIN专用
+        self.din_attention_mlp = tf.keras.Sequential([
+            layers.Dense(64, activation='relu'),
+            layers.Dense(32, activation='relu'),
+            layers.Dense(1, activation=None)      # 输出注意力得分，后面用softmax归一化
+        ])
+
         # ---------- 多任务输出 ----------
         # 分别为 finish 和 like 任务构建单独的输出层
         self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
         self.like_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='like')
+
+
+    def din_attention(self, query, keys, mask=None):
+        """
+        query: 目标物品embedding，shape = (batch_size, emb_dim)
+        keys: 历史序列embedding，shape = (batch_size, seq_len, emb_dim)
+        mask: 掩码，shape = (batch_size, seq_len)，1表示有效，0表示padding
+
+        返回加权求和后的兴趣向量，shape = (batch_size, 1, emb_dim)
+        """
+        query = tf.expand_dims(query, axis=1)
+        query = tf.tile(query, [1, tf.shape(keys)[1], 1])    # (batch_size, seq_len, emb_dim)
+
+        att_input = tf.concat([query, keys, query - keys, query * keys], axis=-1)  # (batch_size, seq_len, 4*emb_dim)
+        att_scores = self.din_attention_mlp(att_input)  # (batch_size, seq_len, 1)
+        att_scores = tf.squeeze(att_scores, axis=-1)  # (batch_size, seq_len)
+
+        if mask is not None:
+            paddings = tf.ones_like(att_scores) * (-2 ** 32 + 1)
+            att_scores = tf.where(mask > 0, att_scores, paddings)
+
+        att_weights = tf.nn.softmax(att_scores, axis=1)  # (batch_size, seq_len)
+        output = tf.reduce_sum(tf.expand_dims(att_weights, -1) * keys, axis=1)  # (batch_size, emb_dim)
+
+        output = tf.expand_dims(output, axis=1)  # ✅ 添加这行，结果是 (batch_size, 1, emb_dim)
+        return output
 
 
     def call(self, inputs, training=False):
@@ -174,14 +207,24 @@ class DeepFM_MTL(Model):
             # 拼接所有嵌入特征
             seq_embeds_concat = tf.concat(seq_embeds, axis=1)                # (batch_size, num_seq_fields, emb_dim)
 
-        # ---------- 历史行为序列特征 ----------
+        # ---------- 历史行为序列特征-历史行为序列特征不再采用简单的池化方式，而是引入了基于目标物品的 DIN 注意力机制进行兴趣提取 ----------
         if self.history_seq_feats:
             history_seq_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
-                history_embeds = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)
-                pooled = tf.reduce_mean(history_embeds, axis=1, keepdims=True)                      # (batch_size, 1, emb_dim)
-                history_seq_embeds.append(pooled)                                            # 历史行为序列 embedding 池化后拼接
-            # 拼接所有嵌入特征
+                # 获取当前历史序列的 embedding 表示
+                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)
+
+                # 构建序列的有效位置 mask（padding 值为 0 的位置将被 mask 掉）
+                mask = tf.cast(tf.not_equal(history_seq_inputs[i], 0), tf.float32)  #  (batch_size, seq_len)
+
+                # 提取与该历史序列对应的目标 item embedding（用于注意力对齐） target_emb_column 表示目标 item 特征名，target_item_index 表示其在 sparse_inputs 中的列索引
+                target_item_embed = self.fm_sparse_embed_dict[feat['target_emb_column']](sparse_inputs[:, feat['target_item_index']])  # (batch_size, emb_dim)
+
+                # 使用 DIN 注意力机制，将历史行为序列根据目标 item 表示进行加权聚合
+                pooled = self.din_attention(target_item_embed, history_embeds , mask)        # (batch_size, 1, emb_dim)
+                history_seq_embeds.append(pooled)                                            # 收集每个序列对应的兴趣表示
+
+            # 拼接所有嵌入特征:多个序列兴趣表示拼接
             history_seq_embeds_concat = tf.concat(history_seq_embeds, axis=1)                # shape = (batch_size, num_history_seq_fields, emb_dim)
 
         # 拼接所有embedding用于FM二阶交叉计算
@@ -245,158 +288,73 @@ class DeepFM_MTL(Model):
 
 
 if __name__ == '__main__':
-    use_sequence = True
+    dense_feats = ['I1', 'I2']
+    sparse_feats = ['C1', 'C2', 'C3']
+    sequence_feats = ['S1', 'S2']
+    feat_columns = [
+        [{'feat': 'I1'}, {'feat': 'I2'}],
+        [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
+        [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}],
+        [{'feat': 'History_H1', 'target_emb_column': 'C1','target_item_index':0}, {'feat': 'History_H2', 'target_emb_column': 'C2','target_item_index':1}]
+    ]
+    # target_emb_column
+    model = DeepFM_MTL(feat_columns=feat_columns, emb_size=5)
 
-    if not use_sequence:
-        # 1. 不使用序列特征
-        dense_feats = ['I1', 'I2']
-        sparse_feats = ['C1', 'C2', 'C3']
-        feat_columns = [
-            [{'feat': 'I1'}, {'feat': 'I2'}],
-            [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
-        ]
+    # 稀疏特征 (batch_size=3)
+    sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
+    # 稠密特征
+    dense_input = np.random.random((3, len(dense_feats)))
 
-        model = DeepFM_MTL(feat_columns=feat_columns, emb_size=5)
-        sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
-        dense_input = np.random.random((3, len(dense_feats)))
-        output = model((sparse_input, dense_input), training=False)
+    # 变长序列特征
+    S1 = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
+    S2 = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
+    sequence_inputs = {}
+    tokenizers = {}
+    for feat, texts in zip(sequence_feats, [S1, S2]):
+        tokenizer = Tokenizer(oov_token='OOV')
+        tokenizer.fit_on_texts(texts)
+        padded = pad_sequences(tokenizer.texts_to_sequences(texts), padding='post')
+        sequence_inputs[feat] = padded
+        tokenizers[feat] = tokenizer
 
-        print("Dense 输入:")
-        print(dense_input)
-        print("Sparse 输入:")
-        print(sparse_input)
-        print("\n模型输出:")
-        print(output)
-        model.summary()
-    else:
-    # 2. 使用序列特征
-        dense_feats = ['I1', 'I2']
-        sparse_feats = ['C1', 'C2', 'C3']
-        sequence_feats = ['S1', 'S2']
-        feat_columns = [
-            [{'feat': 'I1'}, {'feat': 'I2'}],
-            [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
-            [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}],
-            [{'feat': 'History_H1', 'target_emb_column': 'C1'}, {'feat': 'History_H2', 'target_emb_column': 'C2'}]
-        ]
+    seq_input_list = [sequence_inputs[feat] for feat in sequence_feats]
 
-        model = DeepFM_MTL(feat_columns=feat_columns, emb_size=5)
+    # ✅ 增加历史序列特征 History_H1 和 History_H2
+    # 模拟用户过去点击过的C1、C2的历史行为序列（用稀疏特征ID列表表达）
+    # 比如 C1 取值范围是 0-9（因为 feat_num=10），所以这里历史行为可以是其中的一些值
 
-        # 稀疏特征 (batch_size=3)
-        sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
-        # 稠密特征
-        dense_input = np.random.random((3, len(dense_feats)))
+    history_seq_inputs = [
+        np.array([[1, 2, 0], [3, 0, 0], [4, 5, 6]]),  # History_H1 (from C1)
+        np.array([[1, 3, 4], [2, 2, 0], [0, 0, 0]])  # History_H2 (from C2)
+    ]
 
-        # 变长序列特征
-        S1 = ['movie1|movie2|movie3', 'movie2|movie5', 'movie1|movie3|movie4']
-        S2 = ['movie6|movie7', 'movie7|movie8', 'movie6|movie9']
-        sequence_inputs = {}
-        tokenizers = {}
-        for feat, texts in zip(sequence_feats, [S1, S2]):
-            tokenizer = Tokenizer(oov_token='OOV')
-            tokenizer.fit_on_texts(texts)
-            padded = pad_sequences(tokenizer.texts_to_sequences(texts), padding='post')
-            sequence_inputs[feat] = padded
-            tokenizers[feat] = tokenizer
+    # ✅ 合并所有输入并传入模型
+    sequence_tensors = []
+    model_inputs = (sparse_input, dense_input, *seq_input_list, *history_seq_inputs)
+    output = model(model_inputs, training=False)
 
-        seq_input_list = [sequence_inputs[feat] for feat in sequence_feats]
+    print("====== Dense 输入 ======",feat_columns[0])
+    print(dense_input)
+    print()
 
-        # ✅ 增加历史序列特征 History_H1 和 History_H2
-        # 模拟用户过去点击过的C1、C2的历史行为序列（用稀疏特征ID列表表达）
-        # 比如 C1 取值范围是 0-9（因为 feat_num=10），所以这里历史行为可以是其中的一些值
+    print("====== Sparse 输入 ======",feat_columns[1])
+    print(sparse_input)
+    print()
 
-        history_seq_inputs = [
-            np.array([[1, 2, 0], [3, 0, 0], [4, 5, 6]]),  # History_H1 (from C1)
-            np.array([[1, 3, 4], [2, 2, 0], [0, 0, 0]])  # History_H2 (from C2)
-        ]
-
-        # ✅ 合并所有输入并传入模型
-        sequence_tensors = []
-        model_inputs = (sparse_input, dense_input, *seq_input_list, *history_seq_inputs)
-        output = model(model_inputs, training=False)
-
-        print("====== Dense 输入 ======",feat_columns[0])
-        print(dense_input)
+    print("====== 离散序列特征输入（如标题、标签等） ======")
+    for i,feat in enumerate(sequence_feats):
+        print(f"{feat} 输入:",feat_columns[2][i])
+        print(sequence_inputs[feat])
         print()
 
-        print("====== Sparse 输入 ======",feat_columns[1])
-        print(sparse_input)
+    print("====== 历史行为序列输入（History） ======")
+    history_feats = ['History_H1', 'History_H2']
+    for feat, hist_input in zip(history_feats, history_seq_inputs):
+        print(f"{feat} 输入:")
+        print(hist_input)
         print()
 
-        print("====== 离散序列特征输入（如标题、标签等） ======")
-        for i,feat in enumerate(sequence_feats):
-            print(f"{feat} 输入:",feat_columns[2][i])
-            print(sequence_inputs[feat])
-            print()
+    print("====== 模型输出 ======")
+    print(output)
 
-        print("====== 历史行为序列输入（History） ======")
-        history_feats = ['History_H1', 'History_H2']
-        for feat, hist_input in zip(history_feats, history_seq_inputs):
-            print(f"{feat} 输入:")
-            print(hist_input)
-            print()
-
-        print("====== 模型输出 ======")
-        print(output)
-
-        model.summary()
-
-
-
-# Dense 输入:
-# [[0.42735437 0.1205228 ]
-#  [0.3352796  0.72378077]
-#  [0.35812327 0.34702339]]
-# Sparse 输入:
-# [[1 2 3]
-#  [4 5 5]
-#  [1 2 3]]
-# S1 输入:
-# [[2 3 4]
-#  [3 5 0]
-#  [2 4 6]]
-# S2 输入:
-# [[2 3]
-#  [3 4]
-#  [2 5]]
-#
-# 模型输出:
-# {'finish': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-# array([[0.5794624 ],
-#        [0.46379182],
-#        [0.52200294]], dtype=float32)>, 'like': <tf.Tensor: shape=(3, 1), dtype=float32, numpy=
-# array([[0.6530806],
-#        [0.4289063],
-#        [0.5433398]], dtype=float32)>}
-# Model: "deep_fm_mtl"
-# _________________________________________________________________
-# Layer (type)                 Output Shape              Param #
-# =================================================================
-# dense (Dense)                multiple                  3
-# _________________________________________________________________
-# embedding (Embedding)        multiple                  10
-# _________________________________________________________________
-# embedding_1 (Embedding)      multiple                  8
-# _________________________________________________________________
-# embedding_2 (Embedding)      multiple                  6
-# _________________________________________________________________
-# embedding_3 (Embedding)      multiple                  50
-# _________________________________________________________________
-# embedding_4 (Embedding)      multiple                  40
-# _________________________________________________________________
-# embedding_5 (Embedding)      multiple                  30
-# _________________________________________________________________
-# embedding_6 (Embedding)      multiple                  50
-# _________________________________________________________________
-# embedding_7 (Embedding)      multiple                  100
-# _________________________________________________________________
-# sequential (Sequential)      (3, 1)                    86201
-# _________________________________________________________________
-# finish (Dense)               multiple                  2
-# _________________________________________________________________
-# like (Dense)                 multiple                  2
-# =================================================================
-# Total params: 86,502
-# Trainable params: 86,502
-# Non-trainable params: 0
-# _________________________________________________________________
+    model.summary()
