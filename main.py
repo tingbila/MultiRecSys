@@ -53,7 +53,29 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
 
 if __name__ == "__main__":
     # 1. 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
-    data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2.csv", embed_dim=embed_dim)
+    data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2_with_history.csv", embed_dim=embed_dim)
+    print(data.head(5))
+    """
+       uid  user_city  item_id  author_id  item_city  channel  finish  like  music_id  device      time  duration_time  actors   genres        history_item_ids         history_citys
+    0  259         31       26        210          1        0       0     0        82     202  0.250521       3.830290  [4, 0]   [9, 0]  [247, 75, 176, 197, 0]  [14, 28, 29, 103, 0]
+    1   24          4       27        244          2        0       1     0        85     151  0.467755       0.593142  [8, 7]   [6, 0]      [149, 95, 0, 0, 0]     [33, 54, 0, 0, 0]
+    2   10        126      130        265          3        0       0     0       113      97  0.516757      -1.095805  [7, 3]  [11, 2]     [137, 284, 0, 0, 0]     [68, 81, 0, 0, 0]
+    3   90          6      131        266          4        0       0     0         0     112  0.519817      -0.392077  [5, 6]  [11, 7]       [139, 0, 0, 0, 0]      [32, 0, 0, 0, 0]
+    4  242         50      132        202          5        0       1     0         0     155  0.502151       1.015379  [6, 0]   [4, 5]   [244, 214, 241, 0, 0]   [86, 87, 108, 0, 0]
+    """
+    for item in train_ds:
+        print(item)
+        break
+    for item in feat_columns:
+        print(item)
+    # [{'feat': 'time'}, {'feat': 'duration_time'}]
+    # [{'feat': 'uid', 'feat_num': 289}, {'feat': 'user_city', 'feat_num': 129}, {'feat': 'item_id', 'feat_num': 291},
+    #  {'feat': 'author_id', 'feat_num': 289}, {'feat': 'item_city', 'feat_num': 136}, {'feat': 'channel', 'feat_num': 4},
+    #  {'feat': 'music_id', 'feat_num': 115}, {'feat': 'device', 'feat_num': 289}]
+    # [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]
+    # [{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'},
+    #  {'feat': 'history_citys', 'feat_emb_source': 'item_city'}]
+
 
     # 2. 调用模型
     model_name = "DeepFM_MTL"

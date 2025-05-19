@@ -338,7 +338,7 @@ if __name__ == "__main__":
                             SparseFeat("platform", feature_max_idx['platform'], embedding_dim),
                             SparseFeat("is_new", feature_max_idx['is_new'], embedding_dim),
                             VarLenSparseFeat(SparseFeat('hist_sm_id', feature_max_idx['sm_id'], embedding_dim,
-                                                        embedding_name="sm_id"), SEQ_LEN, 'mean', 'hist_len'),
+                                                        embedding_name="sm_id"), SEQ_LEN, 'mean', 'hist_len'),   # embedding_name="sm_id"表示表示：hist_sm_id 和 sm_id 用的是同一个 embedding 矩阵
                             ]
 
     item_feature_columns = [SparseFeat('sm_id', feature_max_idx['sm_id'], embedding_dim),

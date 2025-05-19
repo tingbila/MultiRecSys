@@ -109,11 +109,21 @@ def process_sparse_feats(data, feats):
     # data = pd.read_csv(file, usecols=columns_to_read)
 
     # 对每个稀疏特征进行 Label Encoding 编码
+    label_encoders = {} # 后面可能会用到
     for f in tqdm(feats, desc='process_sparse_feats'):
         label_encoder = LabelEncoder()  # 创建 LabelEncoder 实例
         data[f] = label_encoder.fit_transform(data[f])  # 编码特征
+        label_encoders[f] = label_encoder
 
-    return data
+    for feat, encoder in label_encoders.items():
+        # print(f"Feature: {feat}")
+        mapping = {cls: idx for idx, cls in enumerate(encoder.classes_)}
+        # print("原始值 -> 编码值 映射前5项:", list(mapping.items())[:5])
+    """
+    Feature: item_id
+    原始值 -> 编码值 映射前5项: [(224, 0), (426, 1), (1565, 2), (4273, 3), (4297, 4)]
+    """
+    return data,label_encoders
 
 
 def process_sequence_feats(data, sequence_feats):
@@ -131,6 +141,11 @@ def process_sequence_feats(data, sequence_feats):
     for feature in sequence_feats:
         # 将 '|' 分隔转为空格，适配 Tokenizer 格式， Tokenizer 默认是按 空格（whitespace）分割输入文本的
         texts = data[feature].fillna('').apply(lambda x: x.replace(',', ' ')).tolist()   # ['action comedy', 'drama', '', 'thriller horror']
+        """
+        设置 oov_token='OOV' 的作用是：
+        在词典中添加一个专门的标记，比如 'OOV'，用于代表所有未登录词（词表中没有的词）。
+        当你调用 tokenizer.texts_to_sequences() 处理新文本时，遇到没见过的词就会自动用 OOV 的索引来代替。
+        """
         tokenizer = Tokenizer(oov_token='OOV')
         tokenizer.fit_on_texts(texts) # 把所有序列填充成等长（按最长的补 0）
         sequences = tokenizer.texts_to_sequences(texts)
@@ -143,6 +158,33 @@ def process_sequence_feats(data, sequence_feats):
 
     # 对于离散pad数据，某一行元素就是[2, 3, 0, 0, 0, 0]这种格式
     return data, tokenizers
+
+
+
+
+# 2. 对已经是整数 ID 的序列特征，直接分割+转换+padding
+def process_history_sequence_feats(data, history_sequence_feats, label_encoders, maxlen=5):
+    for feature in history_sequence_feats:
+        sequences = data[feature].fillna('').apply(lambda x: x.split(','))
+
+        if feature == 'history_item_ids':
+            encoder = label_encoders['item_id']
+        elif feature == 'history_citys':
+            encoder = label_encoders['item_city']
+        else:
+            raise ValueError(f"No LabelEncoder found for {feature}")
+
+        # 构造 token -> index 映射字典
+        # token2index = {cls: idx for idx, cls in enumerate(encoder.classes_)} 这个跑出的结果全都是0
+        token2index = {str(cls): idx for idx, cls in enumerate(encoder.classes_)}
+
+        # 对每个 token 安全编码（未登录词 -> 0）
+        encoded_sequences = sequences.apply(lambda seq: [token2index.get(token, 0) for token in seq])
+        padded = pad_sequences(encoded_sequences.tolist(), padding='post', maxlen=maxlen)
+
+        data[feature] = list(padded)
+
+    return data
 
 
 # 创建数据集，处理特征并返回处理后的数据和特征信息
@@ -160,20 +202,22 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     dense_feats (list): 数值特征列名列表
     sparse_feats (list): 稀疏特征列名列表
     """
-    column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","finish", "like", "music_id", "device", "time", "duration_time", "actors", "genres"]
+    column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","finish", "like", "music_id", "device", "time", "duration_time", "actors", "genres", "history_item_ids", "history_citys"]
 
     data = pd.read_csv(file_path, sep='\t', names=column_names)  # 大数据集
     print(data.head(5))
 
     # 区分数值特征和稀疏特征
-    sparse_feats  = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
-    dense_feats   = ["time", "duration_time"]
+    sparse_feats   = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
+    dense_feats    = ["time", "duration_time"]
     sequence_feats = ['actors', 'genres']   # 有的时候可能为空列表 []
-    # sequence_feats = []  # 有的时候可能为空列表 []
+    history_sequence_feats = ["history_item_ids", "history_citys"]   # 增加变长历史序列数据
     
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)
-    data = process_sparse_feats(data, sparse_feats)
+    # 你必须对历史序列字段和当前字段使用相同的 LabelEncoder 实例进行 transform，不能重新 fit
+    data, label_encoders  = process_sparse_feats(data, sparse_feats)
+
     if sequence_feats:
         data, tokenizers = process_sequence_feats(data, sequence_feats)
     else:
@@ -182,6 +226,19 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
     # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
 
+    if history_sequence_feats:
+        data = process_history_sequence_feats(data,history_sequence_feats,label_encoders)
+
+    print(data.head(5))
+    """
+       uid  user_city  item_id  author_id  item_city  channel  finish  like  music_id  device      time  duration_time  actors   genres        history_item_ids         history_citys
+    0  259         31       26        210          1        0       0     0        82     202  0.250521       3.830290  [4, 0]   [9, 0]  [247, 75, 176, 197, 0]  [14, 28, 29, 103, 0]
+    1   24          4       27        244          2        0       1     0        85     151  0.467755       0.593142  [8, 7]   [6, 0]      [149, 95, 0, 0, 0]     [33, 54, 0, 0, 0]
+    2   10        126      130        265          3        0       0     0       113      97  0.516757      -1.095805  [7, 3]  [11, 2]     [137, 284, 0, 0, 0]     [68, 81, 0, 0, 0]
+    3   90          6      131        266          4        0       0     0         0     112  0.519817      -0.392077  [5, 6]  [11, 7]       [139, 0, 0, 0, 0]      [32, 0, 0, 0, 0]
+    4  242         50      132        202          5        0       1     0         0     155  0.502151       1.015379  [6, 0]   [4, 5]   [244, 214, 241, 0, 0]   [86, 87, 108, 0, 0]
+    """
+
     # 构建特征字典列表，用于模型输入
     feat_columns = [
         [dense_feat(feat) for feat in dense_feats],    # 数值特征的字典列表
@@ -189,7 +246,11 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     ]
     if sequence_feats:
         feat_columns.append([sparse_feat(feat, len(tokenizers[feat].word_index) + 1) for feat in sequence_feats])   # 序列稀疏特征的字典列表
-    print(feat_columns)
+
+    # 离散历史序列特征需要自己进行改这里代码
+    if history_sequence_feats:
+        feat_columns.append([{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'},{'feat': 'history_citys',    'feat_emb_source': 'item_city'}])
+
     # [[{'feat': 'time'}, {'feat': 'duration_time'}],
     #  [{'feat': 'uid', 'feat_num': 289},....,{'feat': 'author_id', 'feat_num': 289}],
     #  [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]]
@@ -200,19 +261,47 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     train_data, test_data  = train_test_split(data,       test_size=test_size, random_state=42)
     train_data, valid_data = train_test_split(train_data, test_size=test_size, random_state=42)
 
+
+    # def df_to_dataset(df):
+    #     sparse_tensor = tf.convert_to_tensor(df[sparse_feats].values, dtype=tf.int32)
+    #     dense_tensor = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
+    #     if sequence_feats:
+    #         sequence_tensors = []
+    #         for feat in sequence_feats:
+    #             # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
+    #             tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
+    #             sequence_tensors.append(tensor)
+    #         input_features = (sparse_tensor, dense_tensor, *sequence_tensors)
+    #     else:
+    #         input_features = (sparse_tensor, dense_tensor)
+    #
+    #     labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
+    #     # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
+    #     labels_finish = labels[:, 0]
+    #     labels_like   = labels[:, 1]
+    #
+    #     # *sequence_tensors 相当于传入sequence_tensors[0]、sequence_tensors[1].....
+    #     return tf.data.Dataset.from_tensor_slices((input_features, {'finish': labels_finish, 'like': labels_like}))
+
+
     # 将pandas 的 DataFrame 数据转换成 TensorFlow 的 tf.data.Dataset，以供模型训练使用
     def df_to_dataset(df):
         sparse_tensor = tf.convert_to_tensor(df[sparse_feats].values, dtype=tf.int32)
-        dense_tensor = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
-        if sequence_feats:
-            sequence_tensors = []
-            for feat in sequence_feats:
-                # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
-                tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
-                sequence_tensors.append(tensor)
-            input_features = (sparse_tensor, dense_tensor, *sequence_tensors)
-        else:
-            input_features = (sparse_tensor, dense_tensor)
+        dense_tensor  = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
+
+        # 分别处理 sequence_feats 和 history_sequence_feats
+        seq_input_tensors = []
+        for feat in sequence_feats:
+            tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
+            seq_input_tensors.append(tensor)
+
+        history_input_tensors = []
+        for feat in history_sequence_feats:
+            tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
+            history_input_tensors.append(tensor)
+
+        # ✅ 构建最终输入顺序（必须和模型中 call 函数保持一致）
+        input_features = (sparse_tensor,dense_tensor,*seq_input_tensors,*history_input_tensors)
 
         labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
         # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
@@ -221,6 +310,7 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
 
         # *sequence_tensors 相当于传入sequence_tensors[0]、sequence_tensors[1].....
         return tf.data.Dataset.from_tensor_slices((input_features, {'finish': labels_finish, 'like': labels_like}))
+
 
     train_ds = df_to_dataset(train_data)
     valid_ds = df_to_dataset(valid_data)
