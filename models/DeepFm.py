@@ -45,7 +45,7 @@ class DeepFM_MTL(Model):
         self.dense_feats  = feat_columns[0]  # 连续特征
         self.sparse_feats = feat_columns[1]  # 离散特征
         self.seq_feats = feat_columns[2] if len(feat_columns) > 2 else []  # 可选：变长序列特征
-        self.history_seq_feats = feat_columns[3] if len(feat_columns) > 3 else []  # 可选：历史行为序列特征
+        self.history_seq_feats = feat_columns[3] if len(feat_columns) > 3 else []  # 可选：历史行为序列特征   [{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'}, {'feat': 'history_citys', 'feat_emb_source': 'item_city'}]
 
         self.emb_size = emb_size
 
@@ -137,14 +137,14 @@ class DeepFM_MTL(Model):
         # linear_sparse_out = tf.concat([emb(sparse_inputs[:, i]) for i, emb in enumerate(self.linear_sparse_embeds)],axis=1)
         linear_sparse_out = tf.concat([
             self.linear_sparse_embed_dict[feat['feat']](sparse_inputs[:, i])  for i, feat in enumerate(self.sparse_feats)
-        ], axis=1)
+        ], axis=1)   # (batch_size, num_sparse, 1)
         # print("--------------1-----------")
         # print(linear_sparse_out)
         # [[ 0.01539519 -0.04832922 -0.02953873]
         #  [ 0.02253106  0.00941402  0.04219601]]
 
-        linear_sparse_out = tf.reduce_sum(linear_sparse_out, axis=1, keepdims=True)
-        first_order_output = linear_dense_out + linear_sparse_out
+        linear_sparse_out = tf.reduce_sum(linear_sparse_out, axis=1, keepdims=True)  # (batch_size, 1)
+        first_order_output = linear_dense_out + linear_sparse_out  # (batch_size, 1)
         # print(first_order_output)
         # [[0.22632796]
         #  [0.6256093 ]]
@@ -167,27 +167,24 @@ class DeepFM_MTL(Model):
         # ---------- 变长序列特征（如标题、标签） ----------
         if self.seq_feats:
             seq_embeds = []
-            # for i, (seq_input, seq_layer) in enumerate(zip(seq_inputs, self.seq_embeds)):
-            #     seq_emb = seq_layer(seq_input)  # (batch_size, seq_len, emb_dim)
-            #     pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)    # (batch_size, 1, emb_dim)  从这可以看出边长序列的字段数据最终整体也是当成一个字段处理
-            #     seq_embeds.append(pooled)
             for i, feat in enumerate(self.seq_feats):
                 seq_emb = self.seq_embed_dict[feat['feat']](seq_inputs[i])   # (batch_size, seq_len, emb_dim)
-                pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)      # (batch_size, 1, emb_dim)
-                seq_embeds.append(pooled)
+                pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)      # (batch_size, 1, emb_dim)  从这可以看出变长序列的字段数据最终整体也是当成一个字段处理
+                seq_embeds.append(pooled)                                    # 变长序列特征 embedding 池化后拼接
             # 拼接所有嵌入特征
-            seq_embeds_concat = tf.concat(seq_embeds, axis=1)  # (batch_size, num_seq_fields, emb_dim)
+            seq_embeds_concat = tf.concat(seq_embeds, axis=1)                # (batch_size, num_seq_fields, emb_dim)
 
         # ---------- 历史行为序列特征 ----------
         if self.history_seq_feats:
             history_seq_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
                 seq_emb = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)
-                pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)      # (batch_size, 1, emb_dim)
-                history_seq_embeds.append(pooled)
+                pooled = tf.reduce_mean(seq_emb, axis=1, keepdims=True)                      # (batch_size, 1, emb_dim)
+                history_seq_embeds.append(pooled)                                            # 历史行为序列 embedding 池化后拼接
             # 拼接所有嵌入特征
-            history_seq_embeds_concat = tf.concat(history_seq_embeds, axis=1)  # shape = (batch_size, num_history_seq_fields, emb_dim)
+            history_seq_embeds_concat = tf.concat(history_seq_embeds, axis=1)                # shape = (batch_size, num_history_seq_fields, emb_dim)
 
+        # 拼接所有embedding用于FM二阶交叉计算
         fm_input_parts = [sparse_embeds]
         if self.seq_feats:
             fm_input_parts.append(seq_embeds_concat)
@@ -196,21 +193,15 @@ class DeepFM_MTL(Model):
 
         fm_input = tf.concat(fm_input_parts, axis=1)  # (batch_size, total_fields, emb_dim)
 
-        # if self.seq_feats or self.history_seq_feats:
-        #     # sparse和seq_sparse进行拼接
-        #     fm_input = tf.concat([sparse_embeds, seq_embeds_concat,history_seq_embeds_concat], axis=1)  # (batch, num_sparse_fields + num_seq_fields, emb_dim)
-        # else:
-        #     fm_input = sparse_embeds
-
         # 这一步对每个样本的所有 sparse embedding 向量在特征维度上求和：对于某个样本，就是把它的三个特征的 embedding 向量相加，变成一个总的表示
         # (2, 3, 5) → [2, 5]
-        summed = tf.reduce_sum(fm_input, axis=1)
+        summed = tf.reduce_sum(fm_input, axis=1)    # (batch_size, emb_size)
         # (2, 5) → [2, 5]
-        squared_sum = tf.square(summed)
+        squared_sum = tf.square(summed)             # (batch_size, emb_size)
         # 先对每个 embedding 向量做逐元素平方，然后再对所有 sparse 特征做求和 (2, 3, 5) → [2, 5]
-        squared = tf.reduce_sum(tf.square(fm_input), axis=1)
+        squared = tf.reduce_sum(tf.square(fm_input), axis=1)    # (batch_size, emb_size)
         # [2, 1]，表示每个样本的二阶交叉值（标量）
-        second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1, keepdims=True)
+        second_order = 0.5 * tf.reduce_sum(squared_sum - squared, axis=1, keepdims=True)  # (batch_size, 1)
         # print(second_order)
         # [[0.00537243]
         #  [0.00075581]]
@@ -324,17 +315,17 @@ if __name__ == '__main__':
         model_inputs = (sparse_input, dense_input, *seq_input_list, *history_seq_inputs)
         output = model(model_inputs, training=False)
 
-        print("====== Dense 输入 ======")
+        print("====== Dense 输入 ======",feat_columns[0])
         print(dense_input)
         print()
 
-        print("====== Sparse 输入 ======")
+        print("====== Sparse 输入 ======",feat_columns[1])
         print(sparse_input)
         print()
 
         print("====== 离散序列特征输入（如标题、标签等） ======")
-        for feat in sequence_feats:
-            print(f"{feat} 输入:")
+        for i,feat in enumerate(sequence_feats):
+            print(f"{feat} 输入:",feat_columns[2][i])
             print(sequence_inputs[feat])
             print()
 
