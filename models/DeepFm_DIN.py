@@ -111,27 +111,111 @@ class DeepFM_MTL(Model):
 
     def din_attention(self, query, keys, mask=None):
         """
-        query: 目标物品embedding，shape = (batch_size, emb_dim)
-        keys: 历史序列embedding，shape = (batch_size, seq_len, emb_dim)
-        mask: 掩码，shape = (batch_size, seq_len)，1表示有效，0表示padding
+        query->item_emb: 目标物品embedding，shape = (batch_size, emb_dim)     (3, 5)
+                比如item，下面相当于是给每行对应的item向量都给获取到了
+                (3, 5)
+                tf.Tensor(
+                [[ 0.00409347  0.01375012 -0.00956724  0.04792858  0.04354867]
+                 [ 0.03006909 -0.04394181  0.00638409 -0.04737679  0.04043685]
+                 [ 0.00409347  0.01375012 -0.00956724  0.04792858  0.04354867]], shape=(3, 5), dtype=float32)
 
-        返回加权求和后的兴趣向量，shape = (batch_size, 1, emb_dim)
+        keys->history_items_emb: 历史序列embedding，shape = (batch_size, seq_len, emb_dim)   (3, 3, 5)
+
+        mask->history_items原始数据掩码处理: 掩码，shape = (batch_size, seq_len)，1表示有效，0表示padding 对应keys真实数据的掩码
+                在 DIN 注意力模块中，计算注意力分数后会用这个 mask 来把 padding 的位置打上极小值（-inf），防止这些无效位置对注意力分数和最终兴趣向量产生影响。
+                这一步是为了构造注意力机制中使用的 mask，使模型只聚焦于用户真实的历史行为，忽略 padding 部分，避免引入无效信息干扰。
+                原始数据输入:                               mask数值:
+                tf.Tensor(                                 tf.Tensor(
+                [[1 2 0]                                   [[1. 1. 0.]
+                 [3 0 0]                                    [1. 0. 0.]
+                 [4 5 6]], shape=(3, 3), dtype=int32)       [1. 1. 1.]], shape=(3, 3), dtype=float32)
+        返回加权求和后的兴趣向量，shape = (batch_size, 1, emb_dim)  --> 和以前deepfm的处理格式保持一致
         """
-        query = tf.expand_dims(query, axis=1)
+        query = tf.expand_dims(query, axis=1)   #(3, 5) -> (3, 1, 5)
         query = tf.tile(query, [1, tf.shape(keys)[1], 1])    # (batch_size, seq_len, emb_dim)
-
+        """
+        (3, 3, 5)
+        tf.Tensor(
+        [[[-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]
+          [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]
+          [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]]
+        
+         [[ 0.03528274  0.02952408 -0.02367508  0.00254655 -0.04886616]
+          [ 0.03528274  0.02952408 -0.02367508  0.00254655 -0.04886616]
+          [ 0.03528274  0.02952408 -0.02367508  0.00254655 -0.04886616]]
+        
+         [[-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]
+          [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]
+          [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]]], shape=(3, 3, 5), dtype=float32)
+        """
+        # shape=(3, 3, 5) 和 shape=(3, 3, 5)进行交互处理
         att_input = tf.concat([query, keys, query - keys, query * keys], axis=-1)  # (batch_size, seq_len, 4*emb_dim)
-        att_scores = self.din_attention_mlp(att_input)  # (batch_size, seq_len, 1)
-        att_scores = tf.squeeze(att_scores, axis=-1)  # (batch_size, seq_len)
+        att_scores = self.din_attention_mlp(att_input)       # (batch_size, seq_len, 1)
+        """
+        (3, 3, 1)
+        tf.Tensor(
+        [[[-0.00737097]
+          [-0.00759939]
+          [-0.00788507]]
+        
+         [[-0.02021017]
+          [-0.01353764]
+          [-0.01353764]]
+        
+         [[-0.01749066]
+          [-0.01572918]
+          [-0.00743625]]], shape=(3, 3, 1), dtype=float32)
+        """
+        att_scores = tf.squeeze(att_scores, axis=-1)         # (batch_size, seq_len)
+        """
+        [[ 0.01111379  0.0005887  -0.01211756]
+         [-0.01127466 -0.01005966 -0.01005966]
+         [-0.00443098 -0.00823664  0.00463225]], shape=(3, 3), dtype=float32)
+        """
 
         if mask is not None:
             paddings = tf.ones_like(att_scores) * (-2 ** 32 + 1)
             att_scores = tf.where(mask > 0, att_scores, paddings)
+            """
+            (3, 3)
+            tf.Tensor(
+            [[ 1.6117751e-03  1.3761593e-03 -4.2949673e+09]
+             [-5.3150370e-03 -4.2949673e+09 -4.2949673e+09]
+             [-1.3341270e-03  7.2927773e-03  9.4263274e-03]], shape=(3, 3), dtype=float32)
+            """
 
-        att_weights = tf.nn.softmax(att_scores, axis=1)  # (batch_size, seq_len)
-        output = tf.reduce_sum(tf.expand_dims(att_weights, -1) * keys, axis=1)  # (batch_size, emb_dim)
+        att_weights = tf.nn.softmax(att_scores, axis=1)                         # (batch_size, seq_len)
+        """
+        (3, 3)
+        tf.Tensor(
+        [[0.5011909  0.49880904 0.        ]
+         [1.         0.         0.        ]
+         [0.33306825 0.3316404  0.3352914 ]], shape=(3, 3), dtype=float32)
+        """
 
-        output = tf.expand_dims(output, axis=1)  # ✅ 添加这行，结果是 (batch_size, 1, emb_dim)
+        """
+        print(tf.expand_dims(att_weights, -1).shape)
+        print(tf.expand_dims(att_weights, -1))
+        (3, 3, 1)
+        tf.Tensor(
+        [[[0.5008997 ]
+          [0.49910033]
+          [0.        ]]
+        
+         [[1.        ]
+          [0.        ]
+          [0.        ]]
+        
+         [[0.33396128]
+          [0.33337814]
+          [0.33266056]]], shape=(3, 3, 1), dtype=float32)
+          
+        print((tf.expand_dims(att_weights, -1) * keys).shape)  (3, 3, 5)
+        """
+        # 不好理解的话就这么理解：考虑只有一个样本  # (1, 3, 1) * (1, 3, 5) => (1, 3, 5) => (1,5)
+        output = tf.reduce_sum(tf.expand_dims(att_weights, -1) * keys, axis=1)  # (3, 3, 1) *(3, 3, 5) => (batch_size, seq_len, emb_dim) => (batch_size, emb_dim)
+
+        output = tf.expand_dims(output, axis=1)    # ✅ 添加这行，结果是 (batch_size, 1, emb_dim)
         return output
 
 
@@ -212,14 +296,29 @@ class DeepFM_MTL(Model):
             history_seq_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
                 # 获取当前历史序列的 embedding 表示
-                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)
+                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)   (3, 3, 5)
 
                 # 构建序列的有效位置 mask（padding 值为 0 的位置将被 mask 掉）
                 mask = tf.cast(tf.not_equal(history_seq_inputs[i], 0), tf.float32)  #  (batch_size, seq_len)
-
+                """
+                在 DIN 注意力模块中，计算注意力分数后会用这个 mask 来把 padding 的位置打上极小值（-inf），防止这些无效位置对注意力分数和最终兴趣向量产生影响。
+                这一步是为了构造注意力机制中使用的 mask，使模型只聚焦于用户真实的历史行为，忽略 padding 部分，避免引入无效信息干扰。
+                原始数据输入:                               mask数值:
+                tf.Tensor(                                 tf.Tensor(
+                [[1 2 0]                                   [[1. 1. 0.]
+                 [3 0 0]                                    [1. 0. 0.]
+                 [4 5 6]], shape=(3, 3), dtype=int32)       [1. 1. 1.]], shape=(3, 3), dtype=float32)
+                """
                 # 提取与该历史序列对应的目标 item embedding（用于注意力对齐） target_emb_column 表示目标 item 特征名，target_item_index 表示其在 sparse_inputs 中的列索引
                 target_item_embed = self.fm_sparse_embed_dict[feat['target_emb_column']](sparse_inputs[:, feat['target_item_index']])  # (batch_size, emb_dim)
-
+                """
+                比如item，下面相当于是给每行对应的item向量都给获取到了
+                (3, 5)
+                tf.Tensor(
+                [[ 0.00409347  0.01375012 -0.00956724  0.04792858  0.04354867]
+                 [ 0.03006909 -0.04394181  0.00638409 -0.04737679  0.04043685]
+                 [ 0.00409347  0.01375012 -0.00956724  0.04792858  0.04354867]], shape=(3, 5), dtype=float32)
+                """
                 # 使用 DIN 注意力机制，将历史行为序列根据目标 item 表示进行加权聚合
                 pooled = self.din_attention(target_item_embed, history_embeds , mask)        # (batch_size, 1, emb_dim)
                 history_seq_embeds.append(pooled)                                            # 收集每个序列对应的兴趣表示
