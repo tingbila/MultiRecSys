@@ -63,18 +63,35 @@ if __name__ == "__main__":
     3   90          6      131        266          4        0       0     0         0     112  0.519817      -0.392077  [5, 6]  [11, 7]       [139, 0, 0, 0, 0]      [32, 0, 0, 0, 0]
     4  242         50      132        202          5        0       1     0         0     155  0.502151       1.015379  [6, 0]   [4, 5]   [244, 214, 241, 0, 0]   [86, 87, 108, 0, 0]
     """
+
     for item in train_ds:
         print(item)
         break
+    """
+    ((<tf.Tensor: shape=(2, 8), dtype=int32, numpy=
+    array([[ 35, 120, 270,  54, 121,   0,   0, 115],
+           [ 30,  83,  65, 109,  12,   0,   0, 209]])>, <tf.Tensor: shape=(2, 2), dtype=float32, numpy=
+    array([[-0.12916128,  0.7338877 ],
+           [ 0.37441754, -0.6735681 ]], dtype=float32)>, <tf.Tensor: shape=(2, 2), dtype=int32, numpy=
+    array([[3, 0],
+           [5, 7]])>, <tf.Tensor: shape=(2, 2), dtype=int32, numpy=
+    array([[10,  0],
+           [ 8,  0]])>, <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+    array([[0, 0, 0, 0, 0],
+           [0, 0, 0, 0, 0]])>, <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+    array([[34,  7, 24, 40, 10],
+           [27, 30,  0,  0,  0]])>), {'finish': <tf.Tensor: shape=(2,), dtype=float32, numpy=array([1., 0.], dtype=float32)>, 'like': <tf.Tensor: shape=(2,), dtype=float32, numpy=array([0., 0.], dtype=float32)>})
+    """
+
+
     for item in feat_columns:
         print(item)
-    # [{'feat': 'time'}, {'feat': 'duration_time'}]
-    # [{'feat': 'uid', 'feat_num': 289}, {'feat': 'user_city', 'feat_num': 129}, {'feat': 'item_id', 'feat_num': 291},
-    #  {'feat': 'author_id', 'feat_num': 289}, {'feat': 'item_city', 'feat_num': 136}, {'feat': 'channel', 'feat_num': 4},
-    #  {'feat': 'music_id', 'feat_num': 115}, {'feat': 'device', 'feat_num': 289}]
-    # [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]
-    # [{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'},
-    #  {'feat': 'history_citys', 'feat_emb_source': 'item_city'}]
+    """
+    [{'feat': 'time'}, {'feat': 'duration_time'}]
+    [{'feat': 'uid', 'feat_num': 289}, {'feat': 'user_city', 'feat_num': 129}, {'feat': 'item_id', 'feat_num': 291}, {'feat': 'author_id', 'feat_num': 289}, {'feat': 'item_city', 'feat_num': 136}, {'feat': 'channel', 'feat_num': 4}, {'feat': 'music_id', 'feat_num': 115}, {'feat': 'device', 'feat_num': 289}]
+    [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]
+    [{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'}, {'feat': 'history_citys', 'feat_emb_source': 'item_city'}]
+    """
 
 
     # 2. 调用模型

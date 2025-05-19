@@ -109,21 +109,21 @@ def process_sparse_feats(data, feats):
     # data = pd.read_csv(file, usecols=columns_to_read)
 
     # 对每个稀疏特征进行 Label Encoding 编码
-    label_encoders = {} # 后面可能会用到
+    label_encoders_dict = {} # 后面可能会用到
     for f in tqdm(feats, desc='process_sparse_feats'):
         label_encoder = LabelEncoder()  # 创建 LabelEncoder 实例
         data[f] = label_encoder.fit_transform(data[f])  # 编码特征
-        label_encoders[f] = label_encoder
+        label_encoders_dict[f] = label_encoder
 
-    for feat, encoder in label_encoders.items():
-        # print(f"Feature: {feat}")
-        mapping = {cls: idx for idx, cls in enumerate(encoder.classes_)}
-        # print("原始值 -> 编码值 映射前5项:", list(mapping.items())[:5])
+    # for feat, encoder in label_encoders.items():
+    #     # print(f"Feature: {feat}")
+    #     mapping = {cls: idx for idx, cls in enumerate(encoder.classes_)}
+    #     # print("原始值 -> 编码值 映射前5项:", list(mapping.items())[:5])
     """
     Feature: item_id
     原始值 -> 编码值 映射前5项: [(224, 0), (426, 1), (1565, 2), (4273, 3), (4297, 4)]
     """
-    return data,label_encoders
+    return data,label_encoders_dict
 
 
 def process_sequence_feats(data, sequence_feats):
@@ -162,29 +162,44 @@ def process_sequence_feats(data, sequence_feats):
 
 
 
-# 2. 对已经是整数 ID 的序列特征，直接分割+转换+padding
-def process_history_sequence_feats(data, history_sequence_feats, label_encoders, maxlen=5):
+def process_history_sequence_feats(data, history_sequence_feats, history_sequence_label_encoder_map_config, label_encoders_dict, maxlen=5):
+    """
+    对已经是整数 ID 表示的历史序列特征进行处理：分割 -> 编码 -> padding。
+
+    参数说明：
+    :param data: pd.DataFrame，原始数据集，包含若干历史序列特征列（如 'history_item_ids'）
+    :param history_sequence_feats: List[str]，历史序列特征名列表，例如 ['history_item_ids', 'history_citys']
+    :param history_sequence_label_encoder_map_config: Dict[str, str]，每个历史序列特征对应其主特征的编码器名，例如：
+           {
+               "history_item_ids": "item_id",
+               "history_citys": "item_city"
+           }
+    :param label_encoders: Dict[str, LabelEncoder]，主特征名 -> 已训练好的 LabelEncoder 对象
+    :param maxlen: int，序列最大长度，多余部分会被截断，不足会用 0 补齐（post-padding）
+
+    :return: pd.DataFrame，处理后的数据，历史序列列中的值为长度固定的整数列表（padding 后结果）
+    """
     for feature in history_sequence_feats:
+        # 1. 分割原始字符串为 token 序列（例如 '12,45,7' -> ['12', '45', '7']）
         sequences = data[feature].fillna('').apply(lambda x: x.split(','))
 
-        if feature == 'history_item_ids':
-            encoder = label_encoders['item_id']
-        elif feature == 'history_citys':
-            encoder = label_encoders['item_city']
-        else:
-            raise ValueError(f"No LabelEncoder found for {feature}")
+        # 2. 获取当前序列特征所对应的主特征编码器（如 history_item_ids -> item_id 的 LabelEncoder）
+        encoder = label_encoders_dict[history_sequence_label_encoder_map_config[feature]]
 
-        # 构造 token -> index 映射字典
-        # token2index = {cls: idx for idx, cls in enumerate(encoder.classes_)} 这个跑出的结果全都是0
+        # 3. 构建 token -> index 映射表（使用 str(cls) 是因为有的 LabelEncoder 中的类为字符串）
         token2index = {str(cls): idx for idx, cls in enumerate(encoder.classes_)}
 
-        # 对每个 token 安全编码（未登录词 -> 0）
+        # 4. 对每个 token 编码，若未登录则映射为 0
         encoded_sequences = sequences.apply(lambda seq: [token2index.get(token, 0) for token in seq])
+
+        # 5. 进行 padding（后补零）统一长度
         padded = pad_sequences(encoded_sequences.tolist(), padding='post', maxlen=maxlen)
 
+        # 6. 用填充后的整数序列更新原始列
         data[feature] = list(padded)
 
     return data
+
 
 
 # 创建数据集，处理特征并返回处理后的数据和特征信息
@@ -203,31 +218,32 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     sparse_feats (list): 稀疏特征列名列表
     """
     column_names = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","finish", "like", "music_id", "device", "time", "duration_time", "actors", "genres", "history_item_ids", "history_citys"]
-
     data = pd.read_csv(file_path, sep='\t', names=column_names)  # 大数据集
     print(data.head(5))
 
     # 区分数值特征和稀疏特征
-    sparse_feats   = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
     dense_feats    = ["time", "duration_time"]
+    sparse_feats   = ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device"]
     sequence_feats = ['actors', 'genres']   # 有的时候可能为空列表 []
     history_sequence_feats = ["history_item_ids", "history_citys"]   # 增加变长历史序列数据
-    
+    # 下面2个配置其实可以合并为一个，历史原因:
+    # 历史序列特征 -> 主特征编码器名称的映射配置（用于 LabelEncoder 查找）
+    history_sequence_label_encoder_map_config = {"history_item_ids":'item_id',"history_citys":'item_city'}
+    # 历史序列特征 -> 主特征 embedding 源的映射配置（用于模型构建时查找共享 embedding）
+    history_sequence_emb_map_config = [{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'},{'feat': 'history_citys', 'feat_emb_source': 'item_city'}]
+
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)
     # 你必须对历史序列字段和当前字段使用相同的 LabelEncoder 实例进行 transform，不能重新 fit
-    data, label_encoders  = process_sparse_feats(data, sparse_feats)
+    data, label_encoders_dict  = process_sparse_feats(data, sparse_feats)
 
     if sequence_feats:
         data, tokenizers = process_sequence_feats(data, sequence_feats)
     else:
         tokenizers = {}
-    # print(data)
-    # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
-    # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
 
     if history_sequence_feats:
-        data = process_history_sequence_feats(data,history_sequence_feats,label_encoders)
+        data = process_history_sequence_feats(data,history_sequence_feats,history_sequence_label_encoder_map_config,label_encoders_dict)
 
     print(data.head(5))
     """
@@ -249,40 +265,14 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
 
     # 离散历史序列特征需要自己进行改这里代码
     if history_sequence_feats:
-        feat_columns.append([{'feat': 'history_item_ids', 'feat_emb_source': 'item_id'},{'feat': 'history_citys',    'feat_emb_source': 'item_city'}])
+        feat_columns.append(history_sequence_emb_map_config)
 
     # [[{'feat': 'time'}, {'feat': 'duration_time'}],
     #  [{'feat': 'uid', 'feat_num': 289},....,{'feat': 'author_id', 'feat_num': 289}],
     #  [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]]
 
-    # print(data) 在data上面进行切分数据
-    # 283  111         22      285        288         42        0       0     0         9     288  0.475155       0.170905  [2, 0]   [11, 4]
-    # 284   25         48      286        205        132        0       1     0        19      33  0.509830       0.452397  [2, 0]    [4, 5]
     train_data, test_data  = train_test_split(data,       test_size=test_size, random_state=42)
     train_data, valid_data = train_test_split(train_data, test_size=test_size, random_state=42)
-
-
-    # def df_to_dataset(df):
-    #     sparse_tensor = tf.convert_to_tensor(df[sparse_feats].values, dtype=tf.int32)
-    #     dense_tensor = tf.convert_to_tensor(df[dense_feats].values, dtype=tf.float32)
-    #     if sequence_feats:
-    #         sequence_tensors = []
-    #         for feat in sequence_feats:
-    #             # df[feat].tolist() 是把 pandas.Series 转为 原生 Python list，这一步是为了让 TensorFlow 更容易处理，特别是当你手动构造 Tensor 时，这样转换会更加稳妥
-    #             tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
-    #             sequence_tensors.append(tensor)
-    #         input_features = (sparse_tensor, dense_tensor, *sequence_tensors)
-    #     else:
-    #         input_features = (sparse_tensor, dense_tensor)
-    #
-    #     labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
-    #     # 将输入 (sparse_tensor, dense_tensor) 和标签 labels 打包成一个 tf.data.Dataset
-    #     labels_finish = labels[:, 0]
-    #     labels_like   = labels[:, 1]
-    #
-    #     # *sequence_tensors 相当于传入sequence_tensors[0]、sequence_tensors[1].....
-    #     return tf.data.Dataset.from_tensor_slices((input_features, {'finish': labels_finish, 'like': labels_like}))
-
 
     # 将pandas 的 DataFrame 数据转换成 TensorFlow 的 tf.data.Dataset，以供模型训练使用
     def df_to_dataset(df):
@@ -300,7 +290,7 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
             tensor = tf.convert_to_tensor(df[feat].tolist(), dtype=tf.int32)
             history_input_tensors.append(tensor)
 
-        # ✅ 构建最终输入顺序（必须和模型中 call 函数保持一致）
+        # 构建最终输入顺序（必须和模型中 call 函数保持一致）
         input_features = (sparse_tensor,dense_tensor,*seq_input_tensors,*history_input_tensors)
 
         labels = tf.convert_to_tensor(df[["finish", "like"]].values, dtype=tf.float32)
