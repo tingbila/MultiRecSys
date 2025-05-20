@@ -26,6 +26,7 @@ from models.AFm import AFm
 from models.AFM_Embedding import AFM_Embedding
 from models.MMOE import MMOE
 from models.DeepFm_DIN_GRU import DeepFm_DIN_GRU
+from models.MMOE_IN_DIEN import MMOE_IN_DIEN
 
 
 
@@ -44,7 +45,8 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
         "AFm": lambda: AFm(feat_columns),
         "AFM_Embedding": lambda: AFM_Embedding(feat_columns),
         "MMOE": lambda: MMOE(feat_columns),
-        "DeepFm_DIN_GRU": lambda: DeepFm_DIN_GRU(feat_columns)
+        "DeepFm_DIN_GRU": lambda: DeepFm_DIN_GRU(feat_columns),
+        "MMOE_IN_DIEN": lambda: MMOE_IN_DIEN(feat_columns),
     }
 
     if model_name not in model_factory:
@@ -97,7 +99,7 @@ if __name__ == "__main__":
 
 
     # 2. 调用模型
-    model_name = "DeepFm_DIN_GRU"
+    model_name = "MMOE_IN_DIEN"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估

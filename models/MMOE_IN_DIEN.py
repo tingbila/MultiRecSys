@@ -24,7 +24,7 @@ from config.data_config import *
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
-class MMOE_IN_DIN(Model):
+class MMOE_IN_DIEN(Model):
     def __init__(self, feat_columns, emb_size=5, num_experts=4):
         super().__init__()
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
@@ -393,7 +393,7 @@ if __name__ == '__main__':
         [{'feat': 'History_H1', 'target_emb_column': 'C1','target_item_index':0}, {'feat': 'History_H2', 'target_emb_column': 'C2','target_item_index':1}]
     ]
     # target_emb_column
-    model = MMOE_IN_DIN(feat_columns=feat_columns, emb_size=5)
+    model = MMOE_IN_DIEN(feat_columns=feat_columns, emb_size=5)
 
     # 稀疏特征 (batch_size=3)
     sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
