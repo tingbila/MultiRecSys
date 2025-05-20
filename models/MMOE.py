@@ -127,6 +127,33 @@ class MMOE(Model):
         # 4️⃣ Gate 加权求和（融合多个 expert）
         task_finish_input = tf.reduce_sum(gate_finish_weight * expert_outputs,axis=1)  # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
         task_like_input = tf.reduce_sum(gate_like_weight * expert_outputs,axis=1)      # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
+        """
+        expert_outputs.shape = (2, 3, 4)
+        [
+            [  # 第一个样本：3个 expert 输出向量
+                [1.0, 2.0, 3.0, 4.0],  # expert 1
+                [5.0, 6.0, 7.0, 8.0],  # expert 2
+                [9.0,10.0,11.0,12.0],  # expert 3
+            ],
+            [  # 第二个样本
+                [0.5, 1.0, 1.5, 2.0],
+                [2.0, 2.5, 3.0, 3.5],
+                [4.0, 4.5, 5.0, 5.5],
+            ]
+        ]
+        
+        这个操作表示：对于每个样本，沿着第 1 维（也就是专家数量）对每个位置的值求和   
+        第一个样本：对三个 expert 的向量按列求和：[1.0 + 5.0 + 9.0, 2.0 + 6.0 + 10.0, 3.0 + 7.0 + 11.0, 4.0 + 8.0 + 12.0] = [15.0, 18.0, 21.0, 24.0]        
+        第二个样本：                            [0.5 + 2.0 + 4.0, 1.0 + 2.5 + 4.5, 1.5 + 3.0 + 5.0, 2.0 + 3.5 + 5.5]    = [6.5, 8.0, 9.5, 11.0]        
+
+        输出是 shape (2, 4) 的张量：
+        [
+            [15.0, 18.0, 21.0, 24.0],
+            [ 6.5,  8.0,  9.5, 11.0]
+        ]
+        reduce_sum(axis=1) 就是 把每个样本的多个 expert 输出向量逐元素相加，最终每个样本只留下一个长度为 expert_output_dim 的融合向量。
+        """
+
 
         # 5️⃣ 输出预测
         finish_logit = task_finish_input
