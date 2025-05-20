@@ -24,7 +24,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
 
-class MMOE_IN_DIEN(Model):
+class MMOE_OUT_DIEN(Model):
     def __init__(self, feat_columns, emb_size=5, num_experts=4):
         super().__init__()
         self.dense_feats, self.sparse_feats = feat_columns[0], feat_columns[1]
@@ -380,13 +380,6 @@ class MMOE_IN_DIEN(Model):
 
         # 5️⃣ 输出预测 -- MMOE各个专家的加权输出 + 外层兴趣特征输出  核心代码
         # 这里将历史行为序列特征-引入了基于目标物品的 DIN 注意力机制进行兴趣提取 + 历史行为序列特征-历史行为序列特征通过GRU的最后一个隐状态获取序列整体的兴趣演变表示 2部分放到最外层
-        """
-        # 5️⃣ 最终输出预测：MMOE 各专家加权输出 + 序列兴趣建模输出（外部融合）
-        # 本模块将用户行为序列从两个维度进行建模，并在 MMOE 结构之外进行融合：
-        # 1️⃣ 基于目标物品的注意力机制（DIN）提取用户对当前目标的兴趣表示；
-        # 2️⃣ 基于 GRU 的最后隐状态，捕捉用户兴趣随时间演化的全局表示；
-        # 上述两种表示与对应任务的 MMOE 输出进行拼接，形成最终预测输入。
-        """
         finish_logit_final_parts = [task_finish_input]
         like_logit_final_parts   = [task_like_input]
         if self.history_seq_feats:
@@ -423,7 +416,7 @@ if __name__ == '__main__':
          {'feat': 'History_H2', 'target_emb_column': 'C2', 'target_item_index': 1}]
     ]
     # target_emb_column
-    model = MMOE_IN_DIEN(feat_columns=feat_columns, emb_size=5)
+    model = MMOE_OUT_DIEN(feat_columns=feat_columns, emb_size=5)
 
     # 稀疏特征 (batch_size=3)
     sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
