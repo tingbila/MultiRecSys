@@ -37,7 +37,7 @@ class DeepFm_DIN_GRU(Model):
         [{'feat': 'time'}, {'feat': 'duration_time'}]
         [{'feat': 'uid', 'feat_num': 289}, {'feat': 'user_city', 'feat_num': 129}, {'feat': 'item_id', 'feat_num': 291}, {'feat': 'author_id', 'feat_num': 289}, {'feat': 'item_city', 'feat_num': 136}, {'feat': 'channel', 'feat_num': 4}, {'feat': 'music_id', 'feat_num': 115}, {'feat': 'device', 'feat_num': 289}]
         [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]
-        [{'feat': 'history_item_ids', 'target_emb_column': 'item_id'}, {'feat': 'history_citys', 'target_emb_column': 'item_city'}]
+        [{'feat': 'history_item_ids', 'target_emb_column': 'item_id', 'target_item_index': 2}, {'feat': 'history_citys','target_emb_column': 'item_city','target_item_index': 4}]
         """
 
 

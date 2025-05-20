@@ -37,7 +37,7 @@ class DeepFM_MTL(Model):
         [{'feat': 'time'}, {'feat': 'duration_time'}]
         [{'feat': 'uid', 'feat_num': 289}, {'feat': 'user_city', 'feat_num': 129}, {'feat': 'item_id', 'feat_num': 291}, {'feat': 'author_id', 'feat_num': 289}, {'feat': 'item_city', 'feat_num': 136}, {'feat': 'channel', 'feat_num': 4}, {'feat': 'music_id', 'feat_num': 115}, {'feat': 'device', 'feat_num': 289}]
         [{'feat': 'actors', 'feat_num': 10}, {'feat': 'genres', 'feat_num': 13}]
-        [{'feat': 'history_item_ids', 'target_emb_column': 'item_id'}, {'feat': 'history_citys', 'target_emb_column': 'item_city'}]
+        [{'feat': 'history_item_ids', 'target_emb_column': 'item_id', 'target_item_index': 2}, {'feat': 'history_citys','target_emb_column': 'item_city','target_item_index': 4}]
         """
 
 
@@ -123,14 +123,6 @@ class DeepFM_MTL(Model):
         # [array([[2, 3, 4],  array([[2, 3],
         #         [3, 5, 0],         [3, 4],
         #         [2, 4, 6]]),       [2, 5]])]
-
-        # for i, feat in enumerate(self.sparse_feats):
-        #     print(i,feat)
-        # """
-        # 0 {'feat': 'C1', 'feat_num': 10}
-        # 1 {'feat': 'C2', 'feat_num': 8}
-        # 2 {'feat': 'C3', 'feat_num': 6}
-        # """
 
         # 第一部分：线性部分
         linear_dense_out  = self.linear_dense(dense_inputs)
