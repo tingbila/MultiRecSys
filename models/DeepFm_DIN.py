@@ -78,12 +78,21 @@ class DeepFm_DIN(Model):
 
         # ---------- 历史行为序列特征 ----------
         # [{'feat': 'history_item_ids', 'target_emb_column': 'item_id'}, {'feat': 'history_citys', 'target_emb_column': 'item_city'}]
-        # 每个历史序列特征共享其对应的离散特征 embedding（通过 target_emb_column 指定）
+        """
+        history_seq_embed_dict：构建了每个历史序列特征 → 对应的目标 item embedding 层的映射；
+        history_seq_gru_dict:  构建了每个历史序列特征 → 专属的 tf.keras.layers.GRU 层的映射，保持粒度独立，便于每个序列有自己的建模方式
+        """
         if self.history_seq_feats:
             self.history_seq_embed_dict = {
                 feat['feat']: self.fm_sparse_embed_dict.get(feat['target_emb_column'])
                 for feat in self.history_seq_feats
             }
+            # 这里补充各历史序列特征对应的 embedding 层和 GRU 层
+            self.history_seq_gru_dict = {
+                feat['feat']: tf.keras.layers.GRU(units=emb_size,return_sequences=False,name=f"{feat['feat']}_gru")     # 所有 GRU 都设置了 return_sequences=False，确保你拿到的是最后一步的兴趣向量（简化版 DIEN 结构）。
+                for feat in self.history_seq_feats
+            }
+
 
         # ---------- DNN 部分 ----------
         self.dnn = tf.keras.Sequential([
@@ -161,7 +170,6 @@ class DeepFm_DIN(Model):
         # 2. 构建注意力输入特征：query 和 key 的组合特征  这是 DIN 的核心设计！用 [q, k, q-k, q*k] 四个部分建模 query 和 key 之间的复杂关系。
         # shape=(3, 3, 5) 和 shape=(3, 3, 5)进行交互处理
         att_input = tf.concat([query, keys, query - keys, query * keys], axis=-1)  # (batch_size, seq_len, 4*emb_dim)
-
 
         # 3. 通过一个小 MLP 得到注意力分数:用一个浅层网络（可学习）得到每个历史行为对当前目标 item 的注意力分数。
         att_scores = self.din_attention_mlp(att_input)       # (batch_size, seq_len, 1)  ====> 其实看到这里其实就是权重了。。
@@ -311,7 +319,7 @@ class DeepFm_DIN(Model):
             # 拼接所有嵌入特征
             seq_embeds_concat = tf.concat(seq_embeds, axis=1)                # (batch_size, num_seq_fields, emb_dim)
 
-        # ---------- 历史行为序列特征-历史行为序列特征不再采用简单的池化方式，而是引入了基于目标物品的 DIN 注意力机制进行兴趣提取 ----------
+        # ---------- 第一：历史行为序列特征-历史行为序列特征不再采用简单的池化方式，而是引入了基于目标物品的 DIN 注意力机制进行兴趣提取 ----------
         if self.history_seq_feats:
             history_seq_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
@@ -346,12 +354,34 @@ class DeepFm_DIN(Model):
             # 拼接所有嵌入特征:多个序列兴趣表示拼接
             history_seq_embeds_concat = tf.concat(history_seq_embeds, axis=1)                # shape = (batch_size, num_history_seq_fields, emb_dim)
 
+        # ---------- 第二：历史行为序列特征-历史行为序列特征通过GRU的最后一个隐状态获取序列整体的兴趣演变表示 ----------
+        if self.history_seq_feats:
+            history_seq_gru_embeds = []
+            for i, feat in enumerate(self.history_seq_feats):
+                # 获取当前历史序列的 embedding 表示
+                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)   # (B, T, D)
+
+                # 构建 mask（可选：你可以控制是否在 GRU 中使用 mask）
+                # 传给 GRU 的 mask 必须是 tf.bool, 用于计算或加权时用 tf.float32
+                mask = tf.cast(tf.not_equal(history_seq_inputs[i], 0), tf.bool)  # (B, T)
+                # 调用专属的 GRU 模块，返回每条序列的最终兴趣表示
+                # return_sequences=True  → 输出 shape = (2, 3, 8)
+                # return_sequences=False → 输出 shape = (2, 8)，表示每个序列的最后一个状态向量。
+                gru_output = self.history_seq_gru_dict[feat['feat']](history_embeds, mask=mask)  # (B, D)  (batch_size, emb_dim)
+
+                pooled = tf.expand_dims(gru_output, axis=1)   # 保持维度一致tf.expand_dims(gru_output, axis=1) : (B, D) → (B, 1, D)  (batch_size, 1, emb_dim)
+                history_seq_gru_embeds.append(pooled)
+
+            # 拼接所有嵌入特征:多个序列兴趣表示拼接
+            history_seq_gru_embeds_concat = tf.concat(history_seq_gru_embeds, axis=1)        # shape = (batch_size, num_history_seq_fields, emb_dim)
+
         # 拼接所有embedding用于FM二阶交叉计算
         fm_input_parts = [sparse_embeds]
         if self.seq_feats:
             fm_input_parts.append(seq_embeds_concat)
         if self.history_seq_feats:
-            fm_input_parts.append(history_seq_embeds_concat)
+            fm_input_parts.append(history_seq_embeds_concat)      # 和目标加权后的兴趣向量（如 DIN）
+            fm_input_parts.append(history_seq_gru_embeds_concat)  # GRU 最后隐状态的兴趣表示
 
         fm_input = tf.concat(fm_input_parts, axis=1)  # (batch_size, total_fields, emb_dim)
 
@@ -385,9 +415,12 @@ class DeepFm_DIN(Model):
             seq_flat = tf.reshape(seq_embeds_concat, shape=(-1, seq_embeds_concat.shape[1] * self.emb_size))
             dnn_input_parts.append(seq_flat)
         if self.history_seq_feats:
-            # shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
+            # 和目标加权后的兴趣向量（如 DIN）添加到DNN：shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
             history_seq_flat = tf.reshape(history_seq_embeds_concat, shape=(-1, history_seq_embeds_concat.shape[1] * self.emb_size))
             dnn_input_parts.append(history_seq_flat)
+            # GRU 最后隐状态的兴趣表示：                shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
+            history_seq_gru_flat = tf.reshape(history_seq_gru_embeds_concat, shape=(-1, history_seq_gru_embeds_concat.shape[1] * self.emb_size))
+            dnn_input_parts.append(history_seq_gru_flat)
 
         # 拼接所有部分作为 DNN 输入
         dnn_input = tf.concat(dnn_input_parts, axis=1)  # 最终 shape: (batch_size, dense_dim + sparse_dim + seq_dim + history_seq_dim)
