@@ -16,7 +16,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
 
-class DeepFm_DIN(Model):
+class DeepFm_DIN_GRU(Model):
     def __init__(self, feat_columns, emb_size=5):
         """
         初始化多任务 DeepFM 模型。
@@ -359,7 +359,7 @@ class DeepFm_DIN(Model):
             history_seq_gru_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
                 # 获取当前历史序列的 embedding 表示
-                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)   # (B, T, D)
+                history_embeds  = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)  (3, 3, 5)  # (B, T, D)
 
                 # 构建 mask（可选：你可以控制是否在 GRU 中使用 mask）
                 # 传给 GRU 的 mask 必须是 tf.bool, 用于计算或加权时用 tf.float32
@@ -367,7 +367,7 @@ class DeepFm_DIN(Model):
                 # 调用专属的 GRU 模块，返回每条序列的最终兴趣表示
                 # return_sequences=True  → 输出 shape = (2, 3, 8)
                 # return_sequences=False → 输出 shape = (2, 8)，表示每个序列的最后一个状态向量。
-                gru_output = self.history_seq_gru_dict[feat['feat']](history_embeds, mask=mask)  # (B, D)  (batch_size, emb_dim)
+                gru_output = self.history_seq_gru_dict[feat['feat']](history_embeds, mask=mask)     # (B, D)  (batch_size, emb_dim)   (3, 5)
 
                 pooled = tf.expand_dims(gru_output, axis=1)   # 保持维度一致tf.expand_dims(gru_output, axis=1) : (B, D) → (B, 1, D)  (batch_size, 1, emb_dim)
                 history_seq_gru_embeds.append(pooled)
@@ -450,7 +450,7 @@ if __name__ == '__main__':
         [{'feat': 'History_H1', 'target_emb_column': 'C1','target_item_index':0}, {'feat': 'History_H2', 'target_emb_column': 'C2','target_item_index':1}]
     ]
     # target_emb_column
-    model = DeepFm_DIN(feat_columns=feat_columns, emb_size=5)
+    model = DeepFm_DIN_GRU(feat_columns=feat_columns, emb_size=5)
 
     # 稀疏特征 (batch_size=3)
     sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
