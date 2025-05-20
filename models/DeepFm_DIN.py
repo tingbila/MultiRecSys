@@ -226,14 +226,13 @@ class DeepFM_MTL(Model):
          [[0.33396128]
           [0.33337814]
           [0.33266056]]], shape=(3, 3, 1), dtype=float32)
-          
-        print((tf.expand_dims(att_weights, -1) * keys).shape)  (3, 3, 5)
         """
 
         # 5. 加权求和历史序列
         # 不好理解的话就这么理解：考虑只有一个样本  # (1, 3, 1) * (1, 3, 5) => (1, 3, 5) => (1,5)
         # 每个历史 item 的 embedding 被乘上注意力权重
         # 然后在序列维度上求和，得到一个加权后的 “兴趣表示向量”
+        # print((tf.expand_dims(att_weights, -1) * keys).shape)  (3, 3, 5)
         output = tf.reduce_sum(tf.expand_dims(att_weights, -1) * keys, axis=1)  # (3, 3, 1) *(3, 3, 5) => (batch_size, seq_len, emb_dim) => (batch_size, emb_dim)
 
         output = tf.expand_dims(output, axis=1)    # ✅ 添加这行，结果是 (batch_size, 1, emb_dim)
