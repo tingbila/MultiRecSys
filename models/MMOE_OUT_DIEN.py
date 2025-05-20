@@ -224,10 +224,8 @@ class MMOE_IN_DIEN(Model):
         dense_inputs = inputs[1]  # shape: (batch_size, num_dense)
 
         # 按照数量来切
-        seq_inputs = inputs[2: 2 + len(
-            self.seq_feats)]  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
-        history_seq_inputs = inputs[2 + len(self.seq_feats): 2 + len(self.seq_feats) + len(
-            self.history_seq_feats)]  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
+        seq_inputs = inputs[2: 2 + len(self.seq_feats)]  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
+        history_seq_inputs = inputs[2 + len(self.seq_feats): 2 + len(self.seq_feats) + len(self.history_seq_feats)]  # list of tensors, each shape each shape each shape: (batch_size, max_seq_len)
         # Dense 输入:
         # [[0.211972   0.3256514 ]
         #  [0.58325326 0.5058359 ]]
@@ -244,28 +242,35 @@ class MMOE_IN_DIEN(Model):
         #         [2, 4, 6]]),       [2, 5]])]
 
         # ---------- 1、稀疏特征处理 ----------
-        sparse_embeds = tf.stack(
-            [self.fm_sparse_embed_dict[feat['feat']](sparse_inputs[:, i]) for i, feat in enumerate(self.sparse_feats)],
-            axis=1)
+        sparse_embeds = tf.stack([self.fm_sparse_embed_dict[feat['feat']](sparse_inputs[:, i]) for i, feat in enumerate(self.sparse_feats)],axis=1)
         # ---------- 序列特征部分（1+2） ----------
         # ---------- 2、变长序列特征（如标题、标签） ----------
         if self.seq_feats:
             seq_embeds = []
             for i, feat in enumerate(self.seq_feats):
                 seq_emb = self.seq_embed_dict[feat['feat']](seq_inputs[i])  # (batch_size, seq_len, emb_dim)
-                pooled = tf.reduce_mean(seq_emb, axis=1,
-                                        keepdims=True)  # (batch_size, 1, emb_dim)  从这可以看出变长序列的字段数据最终整体也是当成一个字段处理
+                pooled = tf.reduce_mean(seq_emb, axis=1,keepdims=True)  # (batch_size, 1, emb_dim)  从这可以看出变长序列的字段数据最终整体也是当成一个字段处理
                 seq_embeds.append(pooled)  # 变长序列特征 embedding 池化后拼接
             # 拼接所有嵌入特征
             seq_embeds_concat = tf.concat(seq_embeds, axis=1)  # (batch_size, num_seq_fields, emb_dim)
 
-        # ---------- 3-1、历史行为序列特征-历史行为序列特征不再采用简单的池化方式，而是引入了基于目标物品的 DIN 注意力机制进行兴趣提取 ----------
+
+        # ---------- 3-1-1、历史行为序列特征-历史行为序列特征采用简单的池化方式----------
         if self.history_seq_feats:
             history_seq_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
+                history_embeds = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])   # (batch_size, seq_len, emb_dim)
+                pooled = tf.reduce_mean(history_embeds, axis=1, keepdims=True)                      # (batch_size, 1, emb_dim)
+                history_seq_embeds.append(pooled)                                                   # 历史行为序列 embedding 池化后拼接
+            # 拼接所有嵌入特征
+            history_seq_embeds_concat = tf.concat(history_seq_embeds, axis=1)                       # shape = (batch_size, num_history_seq_fields, emb_dim)
+
+        # ---------- 3-1-2、历史行为序列特征-历史行为序列特征不再采用简单的池化方式，而是引入了基于目标物品的 DIN 注意力机制进行兴趣提取 ----------
+        if self.history_seq_feats:
+            history_seq_attention_embeds = []
+            for i, feat in enumerate(self.history_seq_feats):
                 # 获取当前历史序列的 embedding 表示
-                history_embeds = self.history_seq_embed_dict[feat['feat']](
-                    history_seq_inputs[i])  # (batch_size, seq_len, emb_dim)   (3, 3, 5)
+                history_embeds = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])  # (batch_size, seq_len, emb_dim)   (3, 3, 5)
 
                 # 构建序列的有效位置 mask（padding 值为 0 的位置将被 mask 掉）
                 mask = tf.cast(tf.not_equal(history_seq_inputs[i], 0), tf.float32)  # (batch_size, seq_len)
@@ -279,8 +284,7 @@ class MMOE_IN_DIEN(Model):
                  [4 5 6]], shape=(3, 3), dtype=int32)       [1. 1. 1.]], shape=(3, 3), dtype=float32)
                 """
                 # 提取与该历史序列对应的目标 item embedding（用于注意力对齐） target_emb_column 表示目标 item 特征名，target_item_index 表示其在 sparse_inputs 中的列索引
-                target_item_embed = self.fm_sparse_embed_dict[feat['target_emb_column']](
-                    sparse_inputs[:, feat['target_item_index']])  # (batch_size, emb_dim)
+                target_item_embed = self.fm_sparse_embed_dict[feat['target_emb_column']](sparse_inputs[:, feat['target_item_index']])  # (batch_size, emb_dim)
                 """
                 比如item，下面相当于是给每行对应的item向量都给获取到了
                 (3, 5)
@@ -291,19 +295,17 @@ class MMOE_IN_DIEN(Model):
                 """
                 # 使用 DIN 注意力机制，将历史行为序列根据目标 item 表示进行加权聚合
                 pooled = self.din_attention(target_item_embed, history_embeds, mask)  # (batch_size, 1, emb_dim)
-                history_seq_embeds.append(pooled)  # 收集每个序列对应的兴趣表示
+                history_seq_attention_embeds.append(pooled)  # 收集每个序列对应的兴趣表示
 
             # 拼接所有嵌入特征:多个序列兴趣表示拼接
-            history_seq_embeds_concat = tf.concat(history_seq_embeds,
-                                                  axis=1)  # shape = (batch_size, num_history_seq_fields, emb_dim)
+            history_seq_attention_embeds_concat = tf.concat(history_seq_attention_embeds,axis=1)  # shape = (batch_size, num_history_seq_fields, emb_dim)
 
         # ---------- 3-2、历史行为序列特征-历史行为序列特征通过GRU的最后一个隐状态获取序列整体的兴趣演变表示 ----------
         if self.history_seq_feats:
             history_seq_gru_embeds = []
             for i, feat in enumerate(self.history_seq_feats):
                 # 获取当前历史序列的 embedding 表示
-                history_embeds = self.history_seq_embed_dict[feat['feat']](
-                    history_seq_inputs[i])  # (batch_size, seq_len, emb_dim)  (3, 3, 5)  # (B, T, D)
+                history_embeds = self.history_seq_embed_dict[feat['feat']](history_seq_inputs[i])  # (batch_size, seq_len, emb_dim)  (3, 3, 5)  # (B, T, D)
 
                 # 构建 mask（可选：你可以控制是否在 GRU 中使用 mask）
                 # 传给 GRU 的 mask 必须是 tf.bool, 用于计算或加权时用 tf.float32
@@ -311,24 +313,19 @@ class MMOE_IN_DIEN(Model):
                 # 调用专属的 GRU 模块，返回每条序列的最终兴趣表示
                 # return_sequences=True  → 输出 shape = (2, 3, 8)
                 # return_sequences=False → 输出 shape = (2, 8)，表示每个序列的最后一个状态向量。
-                gru_output = self.history_seq_gru_dict[feat['feat']](history_embeds,
-                                                                     mask=mask)  # (B, D)  (batch_size, emb_dim)   (3, 5)
+                gru_output = self.history_seq_gru_dict[feat['feat']](history_embeds,mask=mask)  # (B, D)  (batch_size, emb_dim)   (3, 5)
 
-                pooled = tf.expand_dims(gru_output,
-                                        axis=1)  # 保持维度一致tf.expand_dims(gru_output, axis=1) : (B, D) → (B, 1, D)  (batch_size, 1, emb_dim)
+                pooled = tf.expand_dims(gru_output,axis=1)  # 保持维度一致tf.expand_dims(gru_output, axis=1) : (B, D) → (B, 1, D)  (batch_size, 1, emb_dim)
                 history_seq_gru_embeds.append(pooled)
 
             # 拼接所有嵌入特征:多个序列兴趣表示拼接
-            history_seq_gru_embeds_concat = tf.concat(history_seq_gru_embeds,
-                                                      axis=1)  # shape = (batch_size, num_history_seq_fields, emb_dim)
+            history_seq_gru_embeds_concat = tf.concat(history_seq_gru_embeds,axis=1)  # shape = (batch_size, num_history_seq_fields, emb_dim)
 
         # 拼接生成各种DNN的输入
-        sparse_flat = tf.reshape(sparse_embeds,
-                                 shape=(-1, len(self.sparse_feats) * self.emb_size))  # (2,3,5) => (2,3*5)
+        sparse_flat = tf.reshape(sparse_embeds,shape=(-1, len(self.sparse_feats) * self.emb_size))  # (2,3,5) => (2,3*5)
 
         # 初始化 DNN 输入
-        dnn_input_parts = [dense_inputs,
-                           sparse_flat]  # [shape=(batch_size, dense_dim), shape=(batch_size, num_sparse_fields * emb_dim)]
+        dnn_input_parts = [dense_inputs,sparse_flat]  # [shape=(batch_size, dense_dim), shape=(batch_size, num_sparse_fields * emb_dim)]
 
         if self.seq_feats:
             # shape: (batch_size, num_seq_fields, emb_dim) → (batch_size, num_seq_fields * emb_dim)
@@ -336,32 +333,23 @@ class MMOE_IN_DIEN(Model):
             dnn_input_parts.append(seq_flat)
 
         if self.history_seq_feats:
-            # 和目标加权后的兴趣向量（如 DIN）添加到DNN：shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
-            history_seq_flat = tf.reshape(history_seq_embeds_concat,
-                                          shape=(-1, history_seq_embeds_concat.shape[1] * self.emb_size))
+            #  普通池化兴趣 添加到DNN：shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
+            history_seq_flat = tf.reshape(history_seq_embeds_concat,shape=(-1, history_seq_embeds_concat.shape[1] * self.emb_size))
             dnn_input_parts.append(history_seq_flat)
-            # GRU 最后隐状态的兴趣表示：                shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
-            history_seq_gru_flat = tf.reshape(history_seq_gru_embeds_concat,
-                                              shape=(-1, history_seq_gru_embeds_concat.shape[1] * self.emb_size))
-            dnn_input_parts.append(history_seq_gru_flat)
 
         # 拼接所有部分作为 DNN 输入
-        mmoe_input = tf.concat(dnn_input_parts,
-                               axis=1)  # 最终 shape: (batch_size, dense_dim + sparse_dim + seq_dim + history_seq_dim + history_seq_gru_flat)
+        mmoe_input = tf.concat(dnn_input_parts,axis=1)  # 最终 shape: (batch_size, dense_dim + sparse_dim + seq_dim + history_seq_dim)
 
         # 2️⃣ 多专家输出
-        expert_outputs = tf.stack([expert(mmoe_input, training=training) for expert in self.experts],
-                                  axis=1)  # shape: (batch_size, num_experts, expert_output_dim)
+        expert_outputs = tf.stack([expert(mmoe_input, training=training) for expert in self.experts],axis=1)  # shape: (batch_size, num_experts, expert_output_dim)
 
         # 3️⃣ 每个任务的 gate
         gate_finish_weight = tf.expand_dims(self.gate_finish(mmoe_input), axis=-1)  # (batch_size, num_experts, 1)
         gate_like_weight = tf.expand_dims(self.gate_like(mmoe_input), axis=-1)  # (batch_size, num_experts, 1)
 
         # 4️⃣ Gate 加权求和（融合多个 expert）
-        task_finish_input = tf.reduce_sum(gate_finish_weight * expert_outputs,
-                                          axis=1)  # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
-        task_like_input = tf.reduce_sum(gate_like_weight * expert_outputs,
-                                        axis=1)  # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
+        task_finish_input = tf.reduce_sum(gate_finish_weight * expert_outputs,axis=1)  # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
+        task_like_input = tf.reduce_sum(gate_like_weight * expert_outputs,axis=1)  # (batch_size, num_experts, expert_output_dim) ==> (batch_size, expert_output_dim)
         """
         expert_outputs.shape = (2, 3, 4)
         [
@@ -389,13 +377,37 @@ class MMOE_IN_DIEN(Model):
         reduce_sum(axis=1) 就是 把每个样本的多个 expert 输出向量逐元素相加，最终每个样本只留下一个长度为 expert_output_dim 的融合向量。
         """
 
-        # 5️⃣ 输出预测
-        finish_logit = task_finish_input
-        like_logit = task_like_input
+
+        # 5️⃣ 输出预测 -- MMOE各个专家的加权输出 + 外层兴趣特征输出  核心代码
+        # 这里将历史行为序列特征-引入了基于目标物品的 DIN 注意力机制进行兴趣提取 + 历史行为序列特征-历史行为序列特征通过GRU的最后一个隐状态获取序列整体的兴趣演变表示 2部分放到最外层
+        """
+        # 5️⃣ 最终输出预测：MMOE 各专家加权输出 + 序列兴趣建模输出（外部融合）
+        # 本模块将用户行为序列从两个维度进行建模，并在 MMOE 结构之外进行融合：
+        # 1️⃣ 基于目标物品的注意力机制（DIN）提取用户对当前目标的兴趣表示；
+        # 2️⃣ 基于 GRU 的最后隐状态，捕捉用户兴趣随时间演化的全局表示；
+        # 上述两种表示与对应任务的 MMOE 输出进行拼接，形成最终预测输入。
+        """
+        finish_logit_final_parts = [task_finish_input]
+        like_logit_final_parts   = [task_like_input]
+        if self.history_seq_feats:
+            # 和目标加权后的兴趣向量（如 DIN）添加到DNN：shape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
+            history_seq_attention_flat = tf.reshape(history_seq_attention_embeds_concat, shape=(-1, history_seq_attention_embeds_concat.shape[1] * self.emb_size))
+            # 这里可以进一步进行逻辑判断，和target相关的进行筛选
+            finish_logit_final_parts.append(history_seq_attention_flat)
+            like_logit_final_parts.append(history_seq_attention_flat)
+
+            # GRU 最后隐状态的兴趣表示：  hape: (batch_size, num_history_seq_fields, emb_dim) → (batch_size, num_history_seq_fields * emb_dim)
+            # 这里可以进一步进行逻辑判断，和target相关的进行筛选
+            history_seq_gru_flat = tf.reshape(history_seq_gru_embeds_concat, shape=(-1, history_seq_gru_embeds_concat.shape[1] * self.emb_size))
+            finish_logit_final_parts.append(history_seq_gru_flat)
+            like_logit_final_parts.append(history_seq_gru_flat)
+
+        finish_logit_final_input = tf.concat(finish_logit_final_parts,axis=1)
+        like_logit_final_input   = tf.concat(like_logit_final_parts,axis=1)
 
         return {
-            'finish': self.finish_output(finish_logit),
-            'like': self.like_output(like_logit)
+            'finish': self.finish_output(finish_logit_final_input),
+            'like': self.like_output(like_logit_final_input)
         }
 
 
