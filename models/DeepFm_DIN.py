@@ -111,7 +111,14 @@ class DeepFM_MTL(Model):
 
     def din_attention(self, query, keys, mask=None):
         """
-        query->item_emb: 目标物品embedding，shape = (batch_size, emb_dim)     (3, 5)
+        这个函数 din_attention(query, keys, mask) 是 DIN（Deep Interest Network）注意力机制的核心部分，用于计算：
+        当前目标商品（query）和历史点击商品序列（keys）之间的兴趣相关性加权向量。
+        简单说就是：
+             用户历史看过 A、B、C，现在给他看 D，我们要判断：
+             A 和 D 相关？B 和 D 相关？C 和 D 相关？
+            然后给每个历史行为打个权重（attention），加权得到一个 兴趣表达向量（interest summary）。
+
+        query->item_emb->当前目标 item 的 embedding 向量: 目标物品embedding，shape = (batch_size, emb_dim)     (3, 5)
                 比如item，下面相当于是给每行对应的item向量都给获取到了
                 (3, 5)
                 tf.Tensor(
@@ -119,9 +126,9 @@ class DeepFM_MTL(Model):
                  [ 0.03006909 -0.04394181  0.00638409 -0.04737679  0.04043685]
                  [ 0.00409347  0.01375012 -0.00956724  0.04792858  0.04354867]], shape=(3, 5), dtype=float32)
 
-        keys->history_items_emb: 历史序列embedding，shape = (batch_size, seq_len, emb_dim)   (3, 3, 5)
+        keys->history_items_emb->历史点击序列，每个 item 是一个 embedding: 历史序列embedding，shape = (batch_size, seq_len, emb_dim)   (3, 3, 5)
 
-        mask->history_items原始数据掩码处理: 掩码，shape = (batch_size, seq_len)，1表示有效，0表示padding 对应keys真实数据的掩码
+        mask->history_items->	指示历史序列中哪些是 padding，0 表示 padding，1 表示有效 : 原始数据掩码处理: 掩码，shape = (batch_size, seq_len)，1表示有效，0表示padding 对应keys真实数据的掩码
                 在 DIN 注意力模块中，计算注意力分数后会用这个 mask 来把 padding 的位置打上极小值（-inf），防止这些无效位置对注意力分数和最终兴趣向量产生影响。
                 这一步是为了构造注意力机制中使用的 mask，使模型只聚焦于用户真实的历史行为，忽略 padding 部分，避免引入无效信息干扰。
                 原始数据输入:                               mask数值:
@@ -131,8 +138,10 @@ class DeepFM_MTL(Model):
                  [4 5 6]], shape=(3, 3), dtype=int32)       [1. 1. 1.]], shape=(3, 3), dtype=float32)
         返回加权求和后的兴趣向量，shape = (batch_size, 1, emb_dim)  --> 和以前deepfm的处理格式保持一致
         """
-        query = tf.expand_dims(query, axis=1)   #(3, 5) -> (3, 1, 5)
-        query = tf.tile(query, [1, tf.shape(keys)[1], 1])    # (batch_size, seq_len, emb_dim)
+
+        # 1. 将目标 item 的向量复制成一个序列长度的矩阵，准备与历史序列中的每个 item 进行逐个对比。
+        query = tf.expand_dims(query, axis=1)   #(3, 5) -> (3, 1, 5)    # (B, E) -> (B, 1, E)
+        query = tf.tile(query, [1, tf.shape(keys)[1], 1])    # (batch_size, seq_len, emb_dim)  复制考虑seq_len份   -> (B, S, E)
         """
         (3, 3, 5)
         tf.Tensor(
@@ -148,9 +157,14 @@ class DeepFM_MTL(Model):
           [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]
           [-0.00044398 -0.02416375 -0.02272075  0.01461015  0.04648725]]], shape=(3, 3, 5), dtype=float32)
         """
+
+        # 2. 构建注意力输入特征：query 和 key 的组合特征  这是 DIN 的核心设计！用 [q, k, q-k, q*k] 四个部分建模 query 和 key 之间的复杂关系。
         # shape=(3, 3, 5) 和 shape=(3, 3, 5)进行交互处理
         att_input = tf.concat([query, keys, query - keys, query * keys], axis=-1)  # (batch_size, seq_len, 4*emb_dim)
-        att_scores = self.din_attention_mlp(att_input)       # (batch_size, seq_len, 1)
+
+
+        # 3. 通过一个小 MLP 得到注意力分数:用一个浅层网络（可学习）得到每个历史行为对当前目标 item 的注意力分数。
+        att_scores = self.din_attention_mlp(att_input)       # (batch_size, seq_len, 1)  ====> 其实看到这里其实就是权重了。。
         """
         (3, 3, 1)
         tf.Tensor(
@@ -166,13 +180,17 @@ class DeepFM_MTL(Model):
           [-0.01572918]
           [-0.00743625]]], shape=(3, 3, 1), dtype=float32)
         """
+
+        # 4. mask处理 下面这几个步骤都是mask处理，其实可以跳过这几个步骤。
         att_scores = tf.squeeze(att_scores, axis=-1)         # (batch_size, seq_len)
         """
         [[ 0.01111379  0.0005887  -0.01211756]
          [-0.01127466 -0.01005966 -0.01005966]
          [-0.00443098 -0.00823664  0.00463225]], shape=(3, 3), dtype=float32)
         """
-
+        # 使用 mask 去除 padding 的影响
+        # 你不希望模型考虑 padding（空白）的 item，所以需要 把它的注意力分数变成极小值（相当于 -∞），
+        # 让 softmax 的时候它的概率变成 接近 0，不会影响结果。
         if mask is not None:
             paddings = tf.ones_like(att_scores) * (-2 ** 32 + 1)
             att_scores = tf.where(mask > 0, att_scores, paddings)
@@ -183,19 +201,18 @@ class DeepFM_MTL(Model):
              [-5.3150370e-03 -4.2949673e+09 -4.2949673e+09]
              [-1.3341270e-03  7.2927773e-03  9.4263274e-03]], shape=(3, 3), dtype=float32)
             """
-
+        # softmax 得到权重  转化为概率分布，代表当前目标 item 与每个历史 item 的相关性权重（总和为 1）
         att_weights = tf.nn.softmax(att_scores, axis=1)                         # (batch_size, seq_len)
         """
+        att_weights：
         (3, 3)
         tf.Tensor(
         [[0.5011909  0.49880904 0.        ]
          [1.         0.         0.        ]
          [0.33306825 0.3316404  0.3352914 ]], shape=(3, 3), dtype=float32)
-        """
 
-        """
-        print(tf.expand_dims(att_weights, -1).shape)
-        print(tf.expand_dims(att_weights, -1))
+        print(tf.expand_dims(att_weights, -1).shape)：
+        print(tf.expand_dims(att_weights, -1))：
         (3, 3, 1)
         tf.Tensor(
         [[[0.5008997 ]
@@ -212,7 +229,11 @@ class DeepFM_MTL(Model):
           
         print((tf.expand_dims(att_weights, -1) * keys).shape)  (3, 3, 5)
         """
+
+        # 5. 加权求和历史序列
         # 不好理解的话就这么理解：考虑只有一个样本  # (1, 3, 1) * (1, 3, 5) => (1, 3, 5) => (1,5)
+        # 每个历史 item 的 embedding 被乘上注意力权重
+        # 然后在序列维度上求和，得到一个加权后的 “兴趣表示向量”
         output = tf.reduce_sum(tf.expand_dims(att_weights, -1) * keys, axis=1)  # (3, 3, 1) *(3, 3, 5) => (batch_size, seq_len, emb_dim) => (batch_size, emb_dim)
 
         output = tf.expand_dims(output, axis=1)    # ✅ 添加这行，结果是 (batch_size, 1, emb_dim)
