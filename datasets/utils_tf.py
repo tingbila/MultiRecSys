@@ -230,7 +230,7 @@ def create_dataset(file_path='./data/criteo_sampled_data.csv', embed_dim=5):
     # 历史序列特征 -> 主特征编码器名称的映射配置（用于 LabelEncoder 查找）
     history_sequence_label_encoder_map_config = {"history_item_ids":'item_id',"history_citys":'item_city'}
     # 历史序列特征 -> 主特征 embedding 源的映射配置（用于模型构建时查找共享 embedding）
-    history_sequence_emb_map_config = [{'feat': 'history_item_ids', 'target_emb_column': 'item_id'},{'feat': 'history_citys', 'target_emb_column': 'item_city'}]
+    history_sequence_emb_map_config = [{'feat': 'history_item_ids', 'target_emb_column': 'item_id', 'target_item_index': 2}, {'feat': 'history_citys','target_emb_column': 'item_city','target_item_index': 4}]
 
     # 对数值特征、稀疏特征、序列特征进行处理
     data = process_dense_feats(data,  dense_feats)

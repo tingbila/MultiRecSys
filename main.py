@@ -25,6 +25,7 @@ from models.NFM import NFM
 from models.AFm import AFm
 from models.AFM_Embedding import AFM_Embedding
 from models.MMOE import MMOE
+from models.DeepFm_DIN import DeepFm_DIN
 
 
 
@@ -42,7 +43,8 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
         "NFM": lambda: NFM(feat_columns),
         "AFm": lambda: AFm(feat_columns),
         "AFM_Embedding": lambda: AFM_Embedding(feat_columns),
-        "MMOE": lambda: MMOE(feat_columns)
+        "MMOE": lambda: MMOE(feat_columns),
+        "DeepFm_DIN": lambda: DeepFm_DIN(feat_columns)
     }
 
     if model_name not in model_factory:
@@ -95,7 +97,7 @@ if __name__ == "__main__":
 
 
     # 2. 调用模型
-    model_name = "DeepFM_MTL"
+    model_name = "DeepFm_DIN"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估

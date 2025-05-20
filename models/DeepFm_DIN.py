@@ -16,7 +16,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
 
-class DeepFM_MTL(Model):
+class DeepFm_DIN(Model):
     def __init__(self, feat_columns, emb_size=5):
         """
         初始化多任务 DeepFM 模型。
@@ -417,7 +417,7 @@ if __name__ == '__main__':
         [{'feat': 'History_H1', 'target_emb_column': 'C1','target_item_index':0}, {'feat': 'History_H2', 'target_emb_column': 'C2','target_item_index':1}]
     ]
     # target_emb_column
-    model = DeepFM_MTL(feat_columns=feat_columns, emb_size=5)
+    model = DeepFm_DIN(feat_columns=feat_columns, emb_size=5)
 
     # 稀疏特征 (batch_size=3)
     sparse_input = np.array([[1, 2, 3], [4, 5, 5], [1, 2, 3]])
