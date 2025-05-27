@@ -80,7 +80,7 @@ def main():
     sparse_feats = ["uid", "user_city", "item_id", "author_id", "item_city", "channel", "music_id", "device"]
     dense_feats = ["time", "duration_time"]
     sequence_feats = ['actors', 'genres']
-    target = ['finish']  # 推荐任务目标，MMOE这里没有用到这个字段，在后面写的。
+    target = ['finish', 'like']  # 推荐任务目标，MMOE这里没有用到这个字段，在后面写的。
 
     # === 2. 特征处理 ===
     data = process_dense_feats(data, dense_feats)
