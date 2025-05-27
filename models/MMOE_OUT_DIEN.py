@@ -412,8 +412,7 @@ if __name__ == '__main__':
         [{'feat': 'I1'}, {'feat': 'I2'}],
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}],
         [{'feat': 'S1', 'feat_num': 10}, {'feat': 'S2', 'feat_num': 20}],
-        [{'feat': 'History_H1', 'target_emb_column': 'C1', 'target_item_index': 0},
-         {'feat': 'History_H2', 'target_emb_column': 'C2', 'target_item_index': 1}]
+        [{'feat': 'History_H1', 'target_emb_column': 'C1', 'target_item_index': 0},{'feat': 'History_H2', 'target_emb_column': 'C2', 'target_item_index': 1}]
     ]
     # target_emb_column
     model = MMOE_OUT_DIEN(feat_columns=feat_columns, emb_size=5)

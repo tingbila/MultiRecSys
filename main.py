@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
 
     # 2. 调用模型
-    model_name = "MMOE_OUT_DIEN"
+    model_name = "MMOE_IN_DIEN"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估
