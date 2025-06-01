@@ -132,6 +132,8 @@ class MMOE_NLP_Attention(Model):
         expert_outputs = self.attention(expert_outputs)  # Q=K=V
         # 残差连接 + 层归一化
         expert_outputs = self.norm(expert_outputs + residual)   #  加 LayerNorm / 残差连接 是优化项（不强制）
+
+
         """
         归一化的具体过程:
         对形状为 (2, 3, 5) 的张量，LayerNormalization 的计算过程如下：
