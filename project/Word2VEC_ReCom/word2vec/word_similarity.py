@@ -37,7 +37,7 @@ for word, score in similar_words:
 print("[INFO] 开始训练 Word2Vec 模型（vector_size=128, window=5, min_count=5）...")
 model2 = word2vec.Word2Vec(
     sentences,                # 输入语料：一个可迭代对象，每个元素是一句已分词的列表（这里是分好词的文本行）
-    vector_size=128,          # 词向量的维度（每个词将被表示为一个128维的向量）
+    vector_size=128,          # 词向量的维度（每个词将被表示为一个128维的向量） 同时也是隐藏层的维度
     window=5,                 # 上下文窗口大小（目标词左右各考虑5个词作为上下文）
     min_count=5,              # 忽略词频小于5的词（只训练语料中至少出现5次的词，过滤噪声）
     workers=multiprocessing.cpu_count()  # 使用 CPU 的核心数量来并行训练，加快模型构建速度
