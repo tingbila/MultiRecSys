@@ -29,10 +29,12 @@ quantizer = faiss.IndexFlatL2(dimension)
 # - m：PQ 子向量数量（需整除 dimension）
 # - nbits：每个子向量编码使用的比特位数
 index = faiss.IndexIVFPQ(quantizer, dimension, nlist, m, nbits)
+print(index.is_trained) # False
 
 # 5. 训练索引（必要步骤）
 # 训练包括聚类（IVF）和每个簇中子向量的 PQ 量化中心学习
 index.train(vectors)
+print(index.is_trained) # True
 assert index.is_trained, "IndexIVFPQ 索引未训练成功！"
 
 # 6. 添加向量到训练好的索引中
@@ -42,6 +44,9 @@ index.add(vectors)
 query = np.random.rand(5, 128).astype('float32')
 
 # 8. 设置 nprobe，控制查询时扫描的簇数（越大召回越全）
+# nprobe较小时，查询可能会出错，但时间开销很小
+# nprobe较大时，精度逐渐增大，但时间开销也增加
+# nprobe=nlist时，等效于IndexFlatL2索引类型。
 index.nprobe = 10
 
 # 9. 执行搜索，返回前 k 个最相似向量

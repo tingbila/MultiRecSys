@@ -14,9 +14,11 @@ vectors = np.random.rand(10000, 128).astype('float32')
 # 2. 构建精确搜索索引：IndexFlatL2，基于欧氏距离的全量扫描索引
 # 该索引不做压缩或聚类，查询时会遍历所有向量，计算精确距离
 index = faiss.IndexFlatL2(128)
+print(index.is_trained) # True
 
 # 3. 将向量数据添加到索引中，完成索引构建
 index.add(vectors)
+print(index.is_trained) # True
 
 # 4. 构建多个查询向量（这里是5个），维度需与索引一致
 query = np.random.rand(5, 128).astype('float32')
