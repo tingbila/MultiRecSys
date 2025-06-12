@@ -12,7 +12,7 @@ import pickle
 
 """
 word2vec介绍:
- Word2Vec 的作用是 “Embedding 级别的协同过滤召回”
+Word2Vec 的作用是 “Embedding 级别的协同过滤召回”:"用户听过的歌曲序列" → 找出相似歌曲（embedding） → 推荐（召回）
  
 说起来word2vec，其实就是把词映射成一定维度的稠密向量，同时保持住词和词之间的关联性，主要体现在(欧式)距离的远近上。
 那么问题来了，word2vec为什么能够学习到这样的结果？
