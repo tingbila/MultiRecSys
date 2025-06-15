@@ -18,12 +18,10 @@ def prompt_con():
     prompt_user = """
     请根据以下数据，基于 Adtributor 归因算法的思想，结合数据给出指标波动结论。：
 
-    dim    element  surprise   surprise_rank  ep        ep_sum     surprise_sum  overall_dim_surprise_rank
-    渠道    A        0.001973   2              0.373333  0.64       0.010395      1
-    渠道    C        0.000725   4              0.36      1          0.010395      1
-    渠道    B        0.007697   1              0.266667  0.266667   0.010395      1
-    新老客  老客     0.000426   2               0.666667  1          0.000983      2
-    新老客  新客     0.000557   1               0.333333  0.333333   0.000983      2
+    dim,element,before,after,pre_sum,aft_sum,p,q,surprise,surprise_rank,ep,ep_sum,lag_ep_sum,surprise_sum,overall_dim_surprise_rank
+    channel,organic,1624032,1656180,3056814,3121483,0.531282570677,0.530574730024,5.1231e-08,12,0.49711608344,0.888617421021,0.391501337581,1.054355e-06,1
+    channel,googleadwords_int,859705,885023,3056814,3121483,0.281242169134,0.28352645201,1.003124e-06,1,0.391501337581,0.391501337581,0.391501337581,1.054355e-06,1
+    region,Area_IN,1119484,1143835,3056814,3121483,0.366225750078,0.36643960579,6.777e-09,24,0.376548268877,0.376548268877,0.376548268877,6.777e-09,2
 
     请完成以下任务：
     1. 按 surprise_sum 排序，指出哪个维度对整体影响最大；
@@ -31,6 +29,7 @@ def prompt_con():
 
     示例格式：
     【指标波动结论】
+    今天整体指标增加了(降低了) X（用aft_sum-pre_sum），原因如下:
     1. 维度影响排序：A维度（surprise_sum = X）> B维度（surprise_sum = X）
     2. 维度内元素排序：
        - 渠道维度：  a1（surprise 0.007697）> a2（surprise 0.001973）> a3（surprise 0.000725）
@@ -107,33 +106,29 @@ messages内容：
 """
 
 """
-[hadoop()@sg-prod-datacentersg-emrrouter-1 zmy]$ /home/hadoop/hao.liu/python3/bin/python3.12   bb.py
-messages内容：
-[{'role': 'system', 'content': '\n    你是一名数据分析专家，擅长使用 Adtributor 算法进行归因分析和指标波动解读。\n    我将给你不同维度的归因指标数据，请你根据数据直接给出简明扼要的结论，\n    重点总结各维度及元素对整体波动的影响大小，避免解释算法细节，只输出结论和排序。\n    '}, {'role': 'user', 'content': '\n    请根据以下数据，基于 Adtributor 归因算法的思想，结合数据给出指标波动结论。：\n\n    dim,element,before,after,pre_sum,aft_sum,p,q,surprise,surprise_rank,ep,ep_sum,lag_ep_sum,surprise_sum,overall_dim_surprise_rank\n    channel,organic,1624032,1656180,3056814,3121483,0.531282570677,0.530574730024,5.1231e-08,12,0.49711608344,0.888617421021,0.391501337581,1.054355e-06,1\n    channel,googleadwords_int,859705,885023,3056814,3121483,0.281242169134,0.28352645201,1.003124e-06,1,0.391501337581,0.391501337581,0.391501337581,1.054355e-06,1\n    region,Area_IN,1119484,1143835,3056814,3121483,0.366225750078,0.36643960579,6.777e-09,24,0.376548268877,0.376548268877,0.376548268877,6.777e-09,2\n\n    请完成以下任务：\n    1. 按 surprise_sum 排序，指出哪个维度对整体影响最大；\n    2. 对每个维度内的元素，按影响大小排序。\n\n    示例格式：\n    【指标波动结论】\n    1. 维度影响排序：A维度（surprise_sum = X）> B维度（surprise_sum = X）\n    2. 维度内元素排序：\n       - 渠道维度：  a1（surprise 0.007697）> a2（surprise 0.001973）> a3（surprise 0.000725）\n       - 新老客维度：b1（surprise 0.000557）>  b2（surprise 0.000426）\n    注意：只输出结论，不要解释算法或过程。\n    '}]
-----------------------------------------------=------------------------------------------------------------
-----------------------------------------------=------------------------------------------------------------
 思考过程：
-嗯，我现在需要根据用户提供的Adtributor算法的数据来分析指标波动。首先，用户要求按照surprise_sum对维度进行排序，并指出哪个维度对整体影响最大。然后要对每个维度内的元素按影响大小排序。
+嗯，用户给了一个关于Adtributor归因分析的任务。需要根据提供的维度数据，总结指标波动的原因。首先，我需要理解用户提供的数据结构。看到各个维度的surprise_sum和surprise_rank，这些是关键指标。
 
-首先看数据里的维度，有三个行数据：channel有两个元素（organic和googleadwords_int），region有一个元素（Area_IN）。用户给出的数据中还有dim列，分别是channel和region。接下来要看每个维度的surprise_sum值，用户示例中的surprise_sum是每个维度的总和。例如，在数据中，channel维度的两条记录的surprise_sum都是1.054355e-06，而region的是6.777e-09。不过我需要仔细看一下每个维度对应的surprise_sum值是否正确，因为原始数据中每个维度可能有多个元素，surprise_sum应该是该维度所有元素的surprise相加后的总和？
+首先用户的任务有两个部分：按surprise_sum排序维度，然后每个维度内元素按影响排序。数据中有三个行，涉及两个维度：channel和region。注意看数据中的dim列。
 
-看数据里的每一行，每个维度元素的surprise值：对于channel的第一个元素organic的surprise是5.1231e-08，第二个googleadwords_int的是1.003124e-06。而它们的surprise_sum在同一维度（channel）下的值都是1.054355e-06，这可能是该维度下两个元素的surprise相加后的结果，5.1231e-08 + 1.003124e-06 ≈ 1.054355e-06，这没错。然后region维度的元素Area_IN的surprise是6.777e-09，对应的surprise_sum也是这个值，因为只一个元素。因此，各维度的surprise_sum排序应该是channel的1.054355e-06大于region的6.777e-09。因此，维度影响最大的是channel。
+检查数据，channel维度有两行，而region有一行。在surprise_sum列，channel维度的总和是1.054355e-06，而region是6.777e-09。所以channel的surprise_sum明显更大，说明对整体影响最大。虽然数据中有两行属于channel，它们的surprise_sum之和是总和，因为在channel维度下的surprise_sum是合并计算的。根据示例，维度排序应该比较各个维度的surprise_sum的总和。
 
-接下来对每个维度内的元素排序。在channel维度里，两个元素的surprise值分别是googleadwords_int的1.003124e-06和organic的5.1231e-08。所以googleadwords_int的影响更大，排在前面。对于region维度只有一个元素Area_IN，自然排第一。
+接下来看维度内元素排序。在channel维度下有两个元素：organic和googleadwords_int。它们的surprise值分别是5.1231e-08和1.003124e-06。按照数值，googleadwords_int的surprise更高，所以应该排在前面。但要注意surprise_rank的值，第一个元素的rank是12，而第二个的rank是1，说明第二个元素的影响更大。
 
-所以结论就是维度影响排序channel>region。维度内元素排序，channel维度下googleadwords_int第一，organic第二。region只有Area_IN。
+然后region维度的元素是Area_IN，surprise是6.777e-09，因为只有一个元素，所以直接列出。
+
+最后整体指标的变化是aft_sum - pre_sum = 3121483 - 3056814 = 64669，即增加了64669。
+
+需要注意的是，用户在示例中用了科学计数法，所以在结论中保持同样的格式。并且用户要求只输出结论，不需要解释过程。因此需要严格按照用户提供的格式，用示例的结构来组织答案。
 
 ----------------------------------------------=------------------------------------------------------------
 ----------------------------------------------=------------------------------------------------------------
 最终答案：
 ----------------------------------------------1------------------------------------------------------------
 【指标波动结论】  
-1. 维度影响排序：  
-channel维度（surprise_sum = 1.054355e-06） > region维度（surprise_sum = 6.777e-09）  
-
+今天整体指标增加了64669（3121483-3056814），原因如下:  
+1. 维度影响排序：channel维度（surprise_sum = 1.054355e-06）> region维度（surprise_sum = 6.777e-09）  
 2. 维度内元素排序：  
-- channel维度：  
-  googleadwords_int（surprise 1.003124e-06） > organic（surprise 5.1231e-08）  
-- region维度：  
-  Area_IN（surprise 6.777e-09）
+   - channel维度：googleadwords_int（surprise 1.003124e-06）> organic（surprise 5.1231e-08）  
+   - region维度：Area_IN（surprise 6.777e-09）
 """
