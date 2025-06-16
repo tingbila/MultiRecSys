@@ -203,13 +203,13 @@ def build_prompt(csv_data, partition_dt):
                 A维度（surprise_sum = X）
                 B维度（surprise_sum = X）
     2. 维度内元素排序：
-       - 渠道维度：  
-                a1（surprise 0.007697）(before x -> after x) 
-                a2（surprise 0.001973）(before x -> after x)
-                a3（surprise 0.000725）(before x -> after x)
-       - 新老客维度：
-                b1（surprise 0.000557）(before x -> after x) 
-                b2（surprise 0.000426）(before x -> after x)
+        - 渠道维度：  
+                a1 (before x -> after x) （surprise 0.007697）
+                a2 (before x -> after x) （surprise 0.001973）
+                a3 (before x -> after x) （surprise 0.000725）
+        - 新老客维度：
+                b1 (before x -> after x) （surprise 0.000557）
+                b2 (before x -> after x) （surprise 0.000426）
     注意：只输出结论，不要解释算法或过程，输出结果不要带有*这种特殊字符，同时不要进行科学计数法表示。
     """
 
