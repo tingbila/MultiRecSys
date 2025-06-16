@@ -60,6 +60,13 @@
 
 
 
+-----------------------------------------------------------------------------
+-- author：张明阳
+-- create：2025年6月16日12:40:18
+-- function：DAU和DNU指标监控
+-- document:
+------------------------------------------------------------------------------
+
 
 alter table starx_ads.ads_sm_flow_device_indicators_adtributor_di drop if exists partition (dt = '${end_dt}');
 
