@@ -198,7 +198,7 @@ def build_prompt(csv_data, partition_dt):
 
     示例格式：
     【指标波动结论】
-    {partition_dt}整体指标DAU今日指标：aft_sum, 昨日指标:pre_sum, 增加了(降低了) X（用aft_sum-pre_sum），原因如下:
+    DAU今日指标：aft_sum, 昨日指标:pre_sum, 增加了(降低了) X（用aft_sum-pre_sum），原因如下:
     1. 维度影响排序：
                 A维度（surprise_sum = X）
                 B维度（surprise_sum = X）
