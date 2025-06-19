@@ -96,7 +96,7 @@ with t1 as (
 --  	dim	        element	    before               after
 -- 1	region_分子	Area_ME	    4450	             3858
 -- 2	region_分母	Area_ME	    12568	             10854
-insert overwrite table starx_ads.ads_sm_flow_device_indicators_adtributor_di partition (dt='${dt}')
+insert overwrite table starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di partition (dt='${dt}')
 select
       concat(dim,'_','分子') as dim,
       value as element,

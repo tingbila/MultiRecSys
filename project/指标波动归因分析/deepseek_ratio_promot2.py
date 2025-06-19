@@ -25,7 +25,7 @@ def execute_complex_sql(partition_value):
     """
     执行复杂的 Hive SQL 查询，计算维度下的 EP、惊讶度、排序等指标。
     """
-    conn = hive.Connection(host='172.17.33.75', port=7001)
+    conn = hive.Connection(host='xxx', port=7001)
 
     sql = f"""
     with base_info as (
@@ -445,8 +445,8 @@ if __name__ == '__main__':
         result = call_deepseek_api(
             csv_data,
             partition_dt,
-            api_key="sk-ouPVwfVElrCDqAGq8IN4YBo4ikNC7gGYryMB1ir75uXd7Nuu",
-            base_url="https://api.lkeap.cloud.tencent.com/v1",
+            api_key="xxx",
+            base_url="xxxx",
         )
         print("------------------------------------------------------------")
         print("清洗后的最终结果：")
@@ -454,11 +454,11 @@ if __name__ == '__main__':
 
         # 3. 调用飞书接口发送消息
         url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/"
-        post_data = {"app_id": "cli_a2202315c77a500c","app_secret": "TgHQERWSxVjJun2l9haH1c07gP6SwJTe"}
+        post_data = {"app_id": "xxx","app_secret": "xxx"}
         r = requests.post(url, data=post_data)
         tat = r.json()["tenant_access_token"]
         print(tat)
-        chat_id = 'oc_cd6f1cc6c06ff0238c84241cd134b122'
+        chat_id = 'xxx'
         msg_info = result
 
         send(chat_id, tat,'mingyang.zhang@ushow.media', 'mingyang.zhang@ushow.media', partition_dt, msg_info)
