@@ -157,9 +157,6 @@ m1_and_m2 as (
 
 
 
-
-
--- 下面的逻辑和可加性指标是相同的
 select
       -- 维度：Aij代表after、 Fij代表before
       dim,
@@ -183,9 +180,9 @@ select
       m2_surprise,
       m2_ep,
       -- ep&s
-      ep,
       surprise,
       surprise_rank,
+      ep,
       ep_sum,
       lag_ep_sum,
       surprise_sum,
@@ -220,7 +217,7 @@ from (
             ep_sum,
             lag_ep_sum,
             surprise_sum,
-            -- 7. 按照计算好的各维度S汇总值从大到小对dim进行排序
+            -- 10. 按照计算好的各维度S汇总值从大到小对dim进行排序
             dense_rank() over (order by surprise_sum desc) as overall_dim_surprise_rank
       from (
             select
@@ -345,18 +342,18 @@ from (
                               from m1_and_m2
                         ) t1
                         -- 2. 根据设定的单个元素EP阈值，遍历所有元素的EP值是否高于0.2，如果高于，则通过筛选
-                        where abs(t1.ep) >= 0.2   -- 这里加了一个绝对值
+                        -- where abs(t1.ep) >= 0.2   -- 这里加了一个绝对值
                   ) t2
             ) t3
             -- 4. 整体EP(单维度下)（波动贡献率）的筛选：意味着只要选中元素贡献率之和超过60%，就已经能够解释大部分波动原因了
             -- 在根据总EP阈值批量筛选时:包含第一个大于总EP阈值的元素:lag_ep_sum是为了处理这种情况的
             -- 0.5  0.5
             -- 0.9  0.5
-            where t3.ep_sum <= 0.8 or (t3.ep_sum > 0.8 and t3.lag_ep_sum < 0.8)
+            -- where t3.ep_sum <= 0.8 or (t3.ep_sum > 0.8 and t3.lag_ep_sum < 0.8)
       ) t4
 ) t5
 -- 6. 假设我们最终的目标是筛选影响最大的top2的维度进行原因定位
-where t5.overall_dim_surprise_rank <= 2
+-- where t5.overall_dim_surprise_rank <= 2
 
 
 
