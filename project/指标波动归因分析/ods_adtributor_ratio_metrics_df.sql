@@ -8,9 +8,8 @@ with base_info as (
 	 	   dim,      -- 用户分类_分母  {维度}_{分子分母}拼接方式
 	 	   element,
 	 	   cast(before as bigint)  as before,
-	 	   cast(after  as bigint)  as after,
-	 	   'on' as join_column
-	 from  starx_ods.ods_adtributor_add_metrics_df
+	 	   cast(after  as bigint)  as after
+	 from  starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di
 	 where dt = '${dt}'
 ),
 m1_and_m2 as (
@@ -141,8 +140,7 @@ m1_and_m2 as (
                                    select
                                          dim,
                                          sum(before) as pre_sum,
-                                         sum(after)  as aft_sum,
-                                         'on' as join_column
+                                         sum(after)  as aft_sum
                                    from  base_info
                                    group by dim
                              ) t2
