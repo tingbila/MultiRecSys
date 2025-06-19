@@ -1,16 +1,3 @@
-
--- with base_info as (
--- 	 select
--- 	 	   dim,
--- 	 	   element,
--- 	 	   cast(before as bigint)  as before,
--- 	 	   cast(after  as bigint)  as after,
--- 	 	   'on' as join_column
--- 	 from starx_ods.ods_adtributor_add_metrics_df
--- 	 where dt = '20250613'
--- )
-
-
 with base_info as (
 	 select
 	 	   dim,
