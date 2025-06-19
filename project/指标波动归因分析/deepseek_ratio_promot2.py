@@ -30,26 +30,139 @@ def execute_complex_sql(partition_value):
     sql = f"""
     with base_info as (
          select
+               dim,            
+               element,
+               cast(before as bigint)  as before,
+               cast(after  as bigint)  as after
+         from  starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di
+         where dt = '{partition_value}'
+    ),
+    m1_and_m2 as (
+         SELECT
                dim,
                element,
-               cast(dau_before as bigint)  as before,
-               cast(dau_after  as bigint)  as after,
-               'on' as join_column
-         from  starx_ads.ads_sm_flow_device_indicators_adtributor_di
-         where dt = '{partition_value}'
+               m1_before,
+               m1_after,
+               m1_pre_sum,
+               m1_aft_sum,
+               m1_p,
+               m1_q,
+               m1_surprise,
+               m1_ep,
+               m2_before,
+               m2_after,
+               m2_pre_sum,
+               m2_aft_sum,
+               m2_p,
+               m2_q,
+               m2_surprise,
+               m2_ep,
+               m1_m2_ep,                  
+               m1_m2_surprise,              
+               ROUND(m1_m2_ep / ROUND(sum(m1_m2_ep) over (partition by dim),12),12) as m1_m2_ep_normalization
+         from (
+               SELECT    
+                     dim,
+                     element,    
+                     m1_before,
+                     m1_after,
+                     m1_pre_sum,
+                     m1_aft_sum,
+                     m1_p,
+                     m1_q,
+                     m1_surprise,
+                     m1_ep,
+                     m2_before,
+                     m2_after,
+                     m2_pre_sum,
+                     m2_aft_sum,
+                     m2_p,
+                     m2_q,
+                     m2_surprise,
+                     m2_ep,
+                     ROUND(((m1_after - m1_before) * m2_pre_sum - (m2_after - m2_before) * m1_pre_sum) / (m2_pre_sum * (m2_pre_sum + m2_after - m2_before)), 12) as m1_m2_ep, 
+                     ROUND(COALESCE(m1_surprise, 0) + COALESCE(m2_surprise, 0), 12) AS m1_m2_surprise
+               from (
+                     SELECT    
+                           regexp_extract(dim, '^(.*)_[^_]+$', 1) as dim,
+                           element,  
+                           MAX(IF(dim rlike '分子', before, null))                      AS m1_before,
+                           MAX(IF(dim rlike '分子', after, null))                       AS m1_after,
+                           MAX(IF(dim rlike '分子', pre_sum, null))                     AS m1_pre_sum,
+                           MAX(IF(dim rlike '分子', aft_sum, null))                     AS m1_aft_sum,
+                           MAX(IF(dim rlike '分子', p, null))                           AS m1_p,
+                           MAX(IF(dim rlike '分子', q, null))                           AS m1_q,
+                           MAX(IF(dim rlike '分子', surprise, null))                    AS m1_surprise,
+                           MAX(IF(dim rlike '分子', ep, null))                          AS m1_ep,  
+                           MAX(IF(dim rlike '分母', before, null))                      AS m2_before,
+                           MAX(IF(dim rlike '分母', after, null))                       AS m2_after,
+                           MAX(IF(dim rlike '分母', pre_sum, null))                     AS m2_pre_sum,
+                           MAX(IF(dim rlike '分母', aft_sum, null))                     AS m2_aft_sum,
+                           MAX(IF(dim rlike '分母', p, null))                           AS m2_p,
+                           MAX(IF(dim rlike '分母', q, null))                           AS m2_q,
+                           MAX(IF(dim rlike '分母', surprise, null))                    AS m2_surprise,
+                           MAX(IF(dim rlike '分母', ep, null))                          AS m2_ep
+                     from (
+                           select
+                                 t3.dim,
+                                 t3.element,
+                                 t3.before,
+                                 t3.after,
+                                 t3.pre_sum,
+                                 t3.aft_sum,
+                                 t3.p,
+                                 t3.q,
+                                 ROUND(0.5 * (p * LN(2 * p / (p + q)) / LN(10) + q * LN(2 * q / (p + q)) / LN(10)), 12)  as surprise,
+                                 ROUND((after - before) / (aft_sum - pre_sum), 12) as ep
+                           from (
+                                 select
+                                       t1.dim,
+                                       t1.element,
+                                       t1.before,
+                                       t1.after,
+                                       t2.pre_sum,
+                                       t2.aft_sum,   
+                                       ROUND(ABS(t1.before) / ABS(t2.pre_sum), 12) AS p,
+                                       ROUND(ABS(t1.after)  / ABS(t2.aft_sum), 12) AS q
+                                 from  base_info t1
+                                 left  join (  
+                                       select
+                                             dim,
+                                             sum(before) as pre_sum,
+                                             sum(after)  as aft_sum
+                                       from  base_info
+                                       group by dim
+                                 ) t2
+                                 on t1.dim = t2.dim
+                           ) t3
+                     ) t4
+                     group by regexp_extract(dim, '^(.*)_[^_]+$', 1),element         
+               ) t5
+         ) t6
     )
-
-
-
-    select
+    
+    
+    
+    
+    select     
           dim,
-          element,
-          before,
-          after,
-          pre_sum,
-          aft_sum,
-          p,
-          q,
+          element, 
+          m1_before,
+          m1_after,
+          m1_pre_sum,
+          m1_aft_sum,
+          m1_p,
+          m1_q,
+          m1_surprise,
+          m1_ep,   
+          m2_before,
+          m2_after,
+          m2_pre_sum,
+          m2_aft_sum,
+          m2_p,
+          m2_q,
+          m2_surprise,
+          m2_ep,  
           surprise,
           surprise_rank,
           ep,
@@ -61,15 +174,25 @@ def execute_complex_sql(partition_value):
           select
                 dim,
                 element,
-                before,
-                after,
-                pre_sum,
-                aft_sum,
-                p,
-                q,
+                m1_before,
+                m1_after,
+                m1_pre_sum,
+                m1_aft_sum,
+                m1_p,
+                m1_q,
+                m1_surprise,
+                m1_ep,
+                m2_before,
+                m2_after,
+                m2_pre_sum,
+                m2_aft_sum,
+                m2_p,
+                m2_q,
+                m2_surprise,
+                m2_ep, 
+                ep,
                 surprise,
                 surprise_rank,
-                ep,
                 ep_sum,
                 lag_ep_sum,
                 surprise_sum,
@@ -78,101 +201,110 @@ def execute_complex_sql(partition_value):
                 select
                       dim,
                       element,
-                      before,
-                      after,
-                      pre_sum,
-                      aft_sum,
-                      p,
-                      q,
+                      m1_before,
+                      m1_after,
+                      m1_pre_sum,
+                      m1_aft_sum,
+                      m1_p,
+                      m1_q,
+                      m1_surprise,
+                      m1_ep, 
+                      m2_before,
+                      m2_after,
+                      m2_pre_sum,
+                      m2_aft_sum,
+                      m2_p,
+                      m2_q,
+                      m2_surprise,
+                      m2_ep,
+                      ep,
                       surprise,
                       surprise_rank,
-                      ep,
                       ep_sum,
                       lag_ep_sum,
                       sum(surprise) over (partition by dim) as surprise_sum
                 from (
-                      select
+                      select       
                             dim,
-                            element,
-                            before,
-                            after,
-                            pre_sum,
-                            aft_sum,
-                            p,
-                            q,
+                            element, 
+                            m1_before,
+                            m1_after,
+                            m1_pre_sum,
+                            m1_aft_sum,
+                            m1_p,
+                            m1_q,
+                            m1_surprise,
+                            m1_ep, 
+                            m2_before,
+                            m2_after,
+                            m2_pre_sum,
+                            m2_aft_sum,
+                            m2_p,
+                            m2_q,
+                            m2_surprise,
+                            m2_ep,
+                            ep,
                             surprise,
                             surprise_rank,
-                            ep,
                             ep_sum,
                             lag(ep_sum,1,ep_sum) over (partition by dim order by surprise_rank asc) as lag_ep_sum
                       from (
-                            select
-                                  t5.dim,
-                                  t5.element,
-                                  t5.before,
-                                  t5.after,
-                                  t5.pre_sum,
-                                  t5.aft_sum,
-                                  t5.p,
-                                  t5.q,
-                                  t5.surprise,
-                                  t5.surprise_rank,
-                                  t5.ep,
+                            select     
+                                  dim,
+                                  element,    
+                                  m1_before,
+                                  m1_after,
+                                  m1_pre_sum,
+                                  m1_aft_sum,
+                                  m1_p,
+                                  m1_q,
+                                  m1_surprise,
+                                  m1_ep,    
+                                  m2_before,
+                                  m2_after,
+                                  m2_pre_sum,
+                                  m2_aft_sum,
+                                  m2_p,
+                                  m2_q,
+                                  m2_surprise,
+                                  m2_ep,  
+                                  ep,
+                                  surprise,
+                                  surprise_rank, 
                                   sum(abs(ep)) over (partition by dim order by surprise_rank asc rows between unbounded preceding and current row ) as ep_sum
                             from (
-                                  select
-                                        t4.dim,
-                                        t4.element,
-                                        t4.before,
-                                        t4.after,
-                                        t4.pre_sum,
-                                        t4.aft_sum,
-                                        t4.p,
-                                        t4.q,
-                                        t4.surprise,
-                                        row_number() over (partition by dim order by surprise desc) as surprise_rank,
-                                        ROUND((after - before) / (aft_sum - pre_sum), 12) as ep
-                                  from (
-                                        select
-                                              t3.dim,
-                                              t3.element,
-                                              t3.before,
-                                              t3.after,
-                                              t3.pre_sum,
-                                              t3.aft_sum,
-                                              t3.p,
-                                              t3.q,
-                                              ROUND(0.5 * (p * LN(2 * p / (p + q)) / LN(10) + q * LN(2 * q / (p + q)) / LN(10)), 12)  as surprise
-                                        from (
-                                              select
-                                                    t1.dim,
-                                                    t1.element,
-                                                    t1.before,
-                                                    t1.after,
-                                                    t2.pre_sum,
-                                                    t2.aft_sum,
-                                                    ROUND(ABS(t1.before) / ABS(t2.pre_sum), 12) AS p,
-                                                    ROUND(ABS(t1.after)  / ABS(t2.aft_sum), 12) AS q
-                                              from  base_info t1
-                                              left  join (
-                                                    select
-                                                          sum(before) as pre_sum,
-                                                          sum(after)  as aft_sum,
-                                                          'on' as join_column
-                                                    from  base_info
-                                                    where dim = 'region'   
-                                              ) t2
-                                              on t1.join_column = t2.join_column
-                                        ) t3
-                                  ) t4
-                            ) t5
-                            where abs(t5.ep) >= 0.2   -- 这里加了一个绝对值
-                      ) t6
-                ) t7
-                where t7.ep_sum <= 0.8 or (t7.ep_sum > 0.8 and t7.lag_ep_sum < 0.8)
-          ) t8
-    ) t9
-    where t9.overall_dim_surprise_rank <= 2
+                                  select                            
+                                       dim,
+                                       element,    
+                                       m1_before,
+                                       m1_after,
+                                       m1_pre_sum,
+                                       m1_aft_sum,
+                                       m1_p,
+                                       m1_q,
+                                       m1_surprise,
+                                       m1_ep,   
+                                       m2_before,
+                                       m2_after,
+                                       m2_pre_sum,
+                                       m2_aft_sum,
+                                       m2_p,
+                                       m2_q,
+                                       m2_surprise,
+                                       m2_ep,  
+                                       m1_m2_ep_normalization as ep,
+                                       m1_m2_surprise         as surprise,  
+                                       row_number() over (partition by dim order by m1_m2_surprise desc) as surprise_rank
+                                  from m1_and_m2
+                            ) t1
+                                  
+                            where abs(t1.ep) >= 0.2         
+                      ) t2
+                ) t3
+                where t3.ep_sum <= 0.8 or (t3.ep_sum > 0.8 and t3.lag_ep_sum < 0.8)
+          ) t4
+    ) t5  
+    where t5.overall_dim_surprise_rank <= 2
     """
 
     logging.info("执行 SQL 查询中...")
@@ -198,18 +330,18 @@ def build_prompt(csv_data, partition_dt):
 
     示例格式：
     【指标波动结论】
-     DAU今日数据：aft_sum, 昨日数据:pre_sum, 增加了(降低了) X（用aft_sum-pre_sum），原因如下:
+     DAU次日留存率ratio今日数据：m1_aft_sum（X） / m2_aft_sum（X） = x, 昨日数据:m1_pre_sum（X） / m2_pre_sum （X）= x, 增加了(降低了) X，原因如下:
      1. 维度影响排序：
                  A维度（surprise_sum = X）
                  B维度（surprise_sum = X）
      2. 维度内元素排序：
         - 渠道维度：  
-                 a1 (before x -> after x) （surprise 0.007697）
-                 a2 (before x -> after x) （surprise 0.001973）
-                 a3 (before x -> after x) （surprise 0.000725）
+                 a1 分子变化:(m1_before x -> m1_after x) 分母变化：(m2_before x -> m2_after x)
+                 a2 分子变化:(m1_before x -> m1_after x) 分母变化：(m2_before x -> m2_after x)
+                 a3 分子变化:(m1_before x -> m1_after x) 分母变化：(m2_before x -> m2_after x)
         - 新老客维度：
-                 b1 (before x -> after x) （surprise 0.000557）
-                 b2 (before x -> after x) （surprise 0.000426）
+                 b1 分子变化:(m1_before x -> m1_after x) 分母变化：(m2_before x -> m2_after x) 
+                 b2 分子变化:(m1_before x -> m1_after x) 分母变化：(m2_before x -> m2_after x) 
     注意：只输出结论，不要解释算法或过程，输出结果不要带有*这种特殊字符，同时不要进行科学计数法表示。
     """
 
@@ -219,7 +351,7 @@ def build_prompt(csv_data, partition_dt):
     ]
 
 
-def call_deepseek_api(csv_data: str, partition_dt: str, api_key: str, base_url: str, model_name="deepseek-r1") -> str:
+def call_deepseek_api(csv_data: str, partition_dt:str,api_key: str, base_url: str,model_name="deepseek-r1") -> str:
     """
     调用 DeepSeek API 完成分析任务。
     :param csv_data: 查询结果 CSV 字符串
@@ -228,7 +360,7 @@ def call_deepseek_api(csv_data: str, partition_dt: str, api_key: str, base_url: 
     :param model_name: 使用的模型名称
     :return: 返回的模型最终内容字符串
     """
-    messages = build_prompt(csv_data, partition_dt)
+    messages = build_prompt(csv_data,partition_dt)
 
     headers = {"Content-Type": "application/json; charset=utf-8"}  # 可移除，如 OpenAI SDK 自处理
     client = OpenAI(
@@ -263,7 +395,7 @@ def send(chat_id, tat, userid, userid2, today, msg_info):
         "header": {
             "template": "blue",
             "title": {
-                "content": f"📊 DeepSeek-DAU归因模块（{today}）",  # 拼接 today 日期
+                "content": f"📊 DeepSeek-DAU次日留存率归因模块（{today}）",  # 拼接 today 日期
                 "tag": "plain_text"
             }
         },
@@ -290,6 +422,7 @@ def send(chat_id, tat, userid, userid2, today, msg_info):
         'Content-Type': 'application/json'
     }
     response = requests.request("POST", url, params=params, headers=headers, data=payload)
+
 
 
 # 主程序入口
@@ -321,14 +454,14 @@ if __name__ == '__main__':
 
         # 3. 调用飞书接口发送消息
         url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/"
-        post_data = {"app_id": "cli_a2202315c77a500c", "app_secret": "TgHQERWSxVjJun2l9haH1c07gP6SwJTe"}
+        post_data = {"app_id": "cli_a2202315c77a500c","app_secret": "TgHQERWSxVjJun2l9haH1c07gP6SwJTe"}
         r = requests.post(url, data=post_data)
         tat = r.json()["tenant_access_token"]
         print(tat)
         chat_id = 'oc_cd6f1cc6c06ff0238c84241cd134b122'
         msg_info = result
 
-        send(chat_id, tat, 'mingyang.zhang@ushow.media', 'mingyang.zhang@ushow.media', partition_dt, msg_info)
+        send(chat_id, tat,'mingyang.zhang@ushow.media', 'mingyang.zhang@ushow.media', partition_dt, msg_info)
 
     except Exception as e:
         logging.error("执行过程中发生错误：", exc_info=e)
