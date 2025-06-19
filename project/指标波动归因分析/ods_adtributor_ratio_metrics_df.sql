@@ -71,7 +71,7 @@ m1_and_m2 as (
            from (
                  SELECT
                        -- 维度：Aij代表after、 Fij代表before   -- 用户分类、ele
-                       split(dim,'_')[0] as dim,
+                       regexp_extract(dim, '^(.*)_[^_]+$', 1) as dim,
                        element,
                        -- 分子
                        MAX(IF(dim rlike '分子', before, null))                      AS m1_before,
@@ -147,7 +147,7 @@ m1_and_m2 as (
                              on t1.dim = t2.dim
                        ) t3
                  ) t4
-                 group by split(dim,'_')[0],element   -- 用户分类、ele
+                 group by regexp_extract(dim, '^(.*)_[^_]+$', 1),element   -- 用户分类、ele
            ) t5
      ) t6
 )
