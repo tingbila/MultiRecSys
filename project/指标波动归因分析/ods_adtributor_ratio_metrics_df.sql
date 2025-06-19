@@ -33,9 +33,9 @@ SELECT
       m2_q,
       m2_surprise,
       m2_ep,
-      m1_m2_ep,            -- 分子分母的联合贡献度
+      m1_m2_ep,            -- 分子分母的联合贡献度（可能为负数）
       m1_m2_surprise,      -- 分子分母的联合惊讶度
-      -- 6. 分子分母的联合贡献度进行归一化处理
+      -- 6. 分子分母的联合贡献度进行归一化处理（可能为负数）
       ROUND(m1_m2_ep / ROUND(sum(m1_m2_ep) over (partition by 1),12),12) as m1_m2_ep_normalization
 from (
       SELECT
