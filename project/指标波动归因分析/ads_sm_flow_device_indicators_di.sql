@@ -1,65 +1,3 @@
--- CREATE EXTERNAL TABLE `ads_sm_flow_device_indicators_di`(
---   -- 联合主键
---   `platform` string COMMENT '操作系统平台',
---   `app_name` string COMMENT 'app类型',
---   `app_version` string COMMENT 'app软件版本号',
---   `country` string COMMENT '国家',
---   `region` string COMMENT '大区',
---   `language` string COMMENT '语言',
---   `channel` string COMMENT '渠道',
---   `create_date` string COMMENT '设备新增日期 default:2022-06-14',
---   `active_last_date` string COMMENT '设备上次活跃日期 default:2022-06-14',
---
---   -- 设备指标数据
---   `dau` bigint COMMENT '日活设备数',   -- count(deviceid)
---   `install_device_cnt` bigint COMMENT '新增设备数')  -- sum(if(is_new_device = 1, 1, 0))
--- COMMENT '设备指标报表'
--- PARTITIONED BY (
---   `dt` string COMMENT '统计日期')  -- 基准日期
--- ROW FORMAT SERDE
---   'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
--- STORED AS INPUTFORMAT
---   'org.apache.hadoop.mapred.TextInputFormat'
--- OUTPUTFORMAT
---   'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
--- LOCATION
---   'cosn://starmaker-analytics-sg-1256122840/data_warehouse/starx_ads/ads_sm_flow_device_indicators_di'
--- TBLPROPERTIES (
---   'transient_lastDdlTime'='1677215037'
--- )
-
-
-
--- use  starx_ads;
--- drop table ads_sm_flow_device_indicators_adtributor_di;
--- CREATE EXTERNAL TABLE `ads_sm_flow_device_indicators_adtributor_di`(
---   `dim` string COMMENT 'dim',
---   `element` string COMMENT 'element',
---   `dau_before` bigint COMMENT 'dau_before',
---   `dau_after` bigint COMMENT 'dau_after',
---   `install_before` bigint COMMENT 'install_before',
---   `install_after` bigint COMMENT 'install_after'
--- )
--- COMMENT 'ads_sm_flow_device_indicators_adtributor_di指标归因'
--- PARTITIONED BY (
---   `dt` string)
--- ROW FORMAT SERDE
---   'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
--- STORED AS INPUTFORMAT
---   'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat'
--- OUTPUTFORMAT
---   'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat'
--- LOCATION
---   'cosn://starmaker-analytics-sg-1256122840/data_warehouse/starx_ads/ads_sm_flow_device_indicators_adtributor_di'
--- TBLPROPERTIES (
---   'author'='mingyang.zhang',
---   'orc.compress'='snappy',
---   'primary key'='dim、element',
---   'ttl'='1 year'
--- );
-
-
-
 -----------------------------------------------------------------------------
 -- author：张明阳
 -- create：2025年6月16日12:40:18
@@ -113,3 +51,63 @@ group by dim, value
 
 
 
+
+-----------------------------------------------------------------------------
+-- author：张明阳
+-- create：2025年6月16日12:40:18
+-- function：次留指标监控
+-- document:
+------------------------------------------------------------------------------
+
+alter table starx_ads.ads_sm_ug_new_device_retention_adtributor_di drop if exists partition (dt = '${end_dt}');
+with t1 as (
+     select
+           dt,
+           reg_date,
+           split(dim_value, ':')[0] as dim,
+           split(dim_value, ':')[1] as value,
+           new_device,
+           1day_retention
+     from (
+           select
+                 dt,
+                 reg_date,
+                 concat_ws(',',
+                       concat('platform', ':', coalesce(platform, 'other')),
+                       concat('app_name', ':', coalesce(app_name, 'other')),
+                       concat('app_version', ':', coalesce(app_version, 'other')),
+                       concat('region', ':', coalesce(region, 'other')),
+                       concat('country', ':', coalesce(country, 'other')),
+                       concat('channel', ':', coalesce(channel, 'other')),
+                       concat('channel_type', ':', coalesce(channel_type, 'other')),
+                       concat('language', ':', coalesce(language, 'other'))
+                 ) as infos,
+                 new_device,
+                 1day_retention
+           from  starx_da_ads.ads_sm_ug_new_device_retention_di
+           where dt='${dt}'
+           and   reg_date in ('${start_dt}', '${end_dt}')  -- 基准日期
+     ) T
+     lateral view explode(split(infos, ',')) A as dim_value
+)
+
+
+
+--  	dim	        element	    before               after
+-- 1	region_分子	Area_ME	    4450	             3858
+-- 2	region_分母	Area_ME	    12568	             10854
+select
+      concat(dim,'_','分子') as dim,
+      value as element,
+      sum(case when reg_date = '${start_dt}' then 1day_retention else 0 end) as before,
+      sum(case when reg_date = '${end_dt}' then 1day_retention else 0 end)   as after
+from  t1
+group by  dim, value
+union all
+select
+      concat(dim,'_','分母') as dim,
+      value as element,
+      sum(case when reg_date = '${start_dt}' then new_device else 0 end) as before,
+      sum(case when reg_date = '${end_dt}' then new_device else 0 end)   as after
+from  t1
+group by  dim, value
