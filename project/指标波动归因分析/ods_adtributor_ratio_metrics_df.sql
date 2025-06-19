@@ -157,6 +157,9 @@ m1_and_m2 as (
 
 
 
+
+
+-- 下面的逻辑和可加性指标是相同的
 select
       -- 维度：Aij代表after、 Fij代表before
       dim,
@@ -217,7 +220,7 @@ from (
             ep_sum,
             lag_ep_sum,
             surprise_sum,
-            -- 10. 按照计算好的各维度S汇总值从大到小对dim进行排序
+            -- 7. 按照计算好的各维度S汇总值从大到小对dim进行排序
             dense_rank() over (order by surprise_sum desc) as overall_dim_surprise_rank
       from (
             select
