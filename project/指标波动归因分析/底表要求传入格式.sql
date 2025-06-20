@@ -53,7 +53,7 @@ group by dim, value
 -----------------------------------------------------------------------------
 -- author：张明阳
 -- create：2025年6月16日12:40:18
--- function：次留指标监控
+-- function：次留留存率指标监控
 -- document:
 ------------------------------------------------------------------------------
 alter table starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di drop if exists partition (dt = '${dt}');
