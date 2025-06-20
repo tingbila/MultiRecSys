@@ -34,7 +34,8 @@ from (
                     concat('language', ':', coalesce(language, 'other')),
                     concat('channel', ':', coalesce(channel, 'other')),
                     concat('create_date', ':', coalesce(create_date, 'other')),
-                    concat('active_last_date', ':', coalesce(active_last_date, 'other'))
+                    concat('active_last_date', ':', coalesce(active_last_date, 'other')),
+				    concat('platform_app_version', ':', concat(coalesce(platform, 'other'),'_and_',coalesce(app_version, 'other')))
                 ) as infos,
                 dau,
                 install_device_cnt
