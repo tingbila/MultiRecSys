@@ -4,8 +4,6 @@
 -- function：DAU和DNU指标监控
 -- document:
 ------------------------------------------------------------------------------
-
-
 alter table starx_ads.ads_sm_flow_device_indicators_adtributor_di drop if exists partition (dt = '${end_dt}');
 
 
@@ -58,7 +56,6 @@ group by dim, value
 -- function：次留指标监控
 -- document:
 ------------------------------------------------------------------------------
-
 alter table starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di drop if exists partition (dt = '${dt}');
 with t1 as (
      select
