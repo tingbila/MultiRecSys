@@ -44,3 +44,36 @@ group by
 		  active_last_date
 having abs((SUM(IF(dt = '${end_dt}', dau, 0)) - SUM(IF(dt = '${start_dt}', dau, 0)))) > 100
 
+-- 3. 调用FM算法进行训练，我们会发现LOSS损失一直在变小,当模型训练停止时候;
+-- import numpy as np
+--
+-- # cross_weights 是对称矩阵，V_matrix 是 (num_features, emb_size)
+-- num_features = cross_weights.shape[0]
+--
+-- # 保存所有特征对及其交互值（只保留上三角非对角）
+-- interactions = []
+-- for i in range(num_features):
+--   for j in range(i + 1, num_features):
+--       interactions.append(((i, j), cross_weights[i, j]))
+--
+-- # 按绝对值排序（从大到小）
+-- top_k = sorted(interactions, key=lambda x: abs(x[1]), reverse=True)[:10]
+--
+-- # 输出 Top10 特征交互对
+-- print("Top 10 特征交互对（按交互强度）:")
+-- column_names = ["platform", "app_name", "app_version", "country", "region", "language", "channel", "create_date","active_last_date"]
+-- for (i, j), weight in top_k:
+--   name_i = column_names[i]
+--   name_j = column_names[j]
+--   print(f"{name_i} × {name_j} : 权重 = {weight:.6f}")
+--
+-- # Top 10 特征交互对（按交互强度）:
+-- # create_date × active_last_date : 权重 = 0.066382
+-- # app_version × active_last_date : 权重 = 0.032802
+-- # platform × active_last_date : 权重 = -0.029710
+-- # app_version × create_date : 权重 = 0.015355
+-- # platform × create_date : 权重 = -0.015010l
+-- # app_name × app_version : 权重 = 0.011878
+-- # country × active_last_date : 权重 = -0.010133
+-- # country × create_date : 权重 = -0.009827
+-- # app_name × active_last_date : 权重 = 0.009772
