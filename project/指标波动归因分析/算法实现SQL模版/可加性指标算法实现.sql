@@ -165,7 +165,8 @@ from (
             -- 在根据总EP阈值批量筛选时:包含第一个大于总EP阈值的元素:lag_ep_sum是为了处理这种情况的
             -- 0.5  0.5
             -- 0.9  0.5
-            where t6.ep_sum <= 0.8 or (t6.ep_sum > 0.8 and t6.lag_ep_sum < 0.8)
+            -- 2025年8月2日21:36:34 :临时加了一个 (t6.ep_sum > 0.8 and t6.lag_ep_sum = 1)条件
+            where t6.ep_sum <= 0.8 or (t6.ep_sum > 0.8 and t6.lag_ep_sum < 0.8) or (t6.ep_sum > 0.8 and t6.lag_ep_sum = 1)
       ) t7
 ) t8
 -- 11. 假设我们最终的目标是筛选影响最大的top2的维度进行原因定位
