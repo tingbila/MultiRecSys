@@ -140,7 +140,7 @@ from (
                                           -- JS散度公式s = 0.5 * (p * math.log10(2 * p / (p + q)) + q * math.log10(2 * q / (p + q)))
                                           -- 3. 惊讶度（Surprise，用S表示）是一个用来衡量指标结构前后变化程度的指标，回答的是"哪个元素的波动最让人惊讶"的问题。
                                           -- JS散度要求概率非负且0~1之间，加绝对值避免负值导致log计算出错
-                                          ROUND(0.5 * (p * LN(2 * p / (p + q)) / LN(10) + q * LN(2 * q / (p + q)) / LN(10)), 12)  as surprise
+                                          coalesce(ROUND(0.5 * (p * LN(2 * p / (p + q)) / LN(10) + q * LN(2 * q / (p + q)) / LN(10)), 12),0)  as surprise
                                     from (
                                           select
                                                 t1.dim,
