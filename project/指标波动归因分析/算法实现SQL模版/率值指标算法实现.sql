@@ -7,8 +7,11 @@ with base_info as (
 	 select
 	 	   dim,      -- 用户分类_分母  {维度}_{分子分母}拼接方式
 	 	   element,
-	 	   cast(before as bigint)  as before,
-	 	   cast(after  as bigint)  as after
+	 	   before,
+	 	   after,
+	 	   -- 1. 先计算活动前和活动后销售额的总体数据--对于每个维度pre_sum和aft_sum大部分情况应该是一样的，但是有的时候可能不相同。
+	 	   pre_sum,
+	 	   aft_sum
 	 from  starx_ads.ads_sm_ug_new_device_retention_ratio_adtributor_di
 	 where dt = '${dt}'
 ),
@@ -35,10 +38,10 @@ m1_and_m2 as (
            m2_q,
            m2_surprise,
            m2_ep,
-           m1_m2_ep,            -- 分子分母的联合贡献度（可能为负数）
-           m1_m2_surprise,      -- 分子分母的联合惊讶度
+           m1_m2_ep,                        -- 分子分母的联合贡献度（可能为负数）
+           m1_m2_surprise as surprise,      -- 分子分母的联合惊讶度
            -- 6. 分子分母的联合贡献度进行归一化处理（可能为负数）
-           ROUND(m1_m2_ep / ROUND(sum(m1_m2_ep) over (partition by dim),12),12) as m1_m2_ep_normalization
+           ROUND(m1_m2_ep / ROUND(sum(m1_m2_ep) over (partition by dim),12),12) as ep  -- 分子分母的联合贡献度（归一化的结果）
      from (
            SELECT
                  -- 维度：Aij代表after、 Fij代表before
@@ -93,14 +96,14 @@ m1_and_m2 as (
                        MAX(IF(dim rlike '分母', ep, null))                          AS m2_ep
                  from (
                        select
-                             t3.dim,
-                             t3.element,
-                             t3.before,
-                             t3.after,
-                             t3.pre_sum,
-                             t3.aft_sum,
-                             t3.p,
-                             t3.q,
+                             t2.dim,
+                             t2.element,
+                             t2.before,
+                             t2.after,
+                             t2.pre_sum,
+                             t2.aft_sum,
+                             t2.p,
+                             t2.q,
                              -- JS散度公式s = 0.5 * (p * math.log10(2 * p / (p + q)) + q * math.log10(2 * q / (p + q)))
                              -- 3. 惊讶度（Surprise，用S表示）是一个用来衡量指标结构前后变化程度的指标，回答的是"哪个元素的波动最让人惊讶"的问题。
                              -- JS散度要求概率非负且0~1之间，加绝对值避免负值导致log计算出错
@@ -128,28 +131,18 @@ m1_and_m2 as (
                                    t1.element,
                                    t1.before,
                                    t1.after,
-                                   t2.pre_sum,
-                                   t2.aft_sum,
+                                   t1.pre_sum,
+                                   t1.aft_sum,
                                    -- 2. 计算活动前销售额占比p和活动后销售额占比q
                                    -- 加绝对值可以避免负值导致后续JS散度计算出错:p 和 q 表示概率或占比，理论上是非负且小于等于1的数值。它们是活动前后某元素销售额占总销售额的比例，不应出现负值。
-                                   ROUND(ABS(t1.before) / ABS(t2.pre_sum), 12) AS p,
-                                   ROUND(ABS(t1.after)  / ABS(t2.aft_sum), 12) AS q
+                                   ROUND(ABS(t1.before) / ABS(t1.pre_sum), 12) AS p,
+                                   ROUND(ABS(t1.after)  / ABS(t1.aft_sum), 12) AS q
                              from  base_info t1
-                             left  join (
-                                   -- 1. 先计算活动前和活动后销售额的总体数据-对于每个维度pre_sum和aft_sum应该是一样的
-                                   select
-                                         dim,
-                                         sum(before) as pre_sum,
-                                         sum(after)  as aft_sum
-                                   from  base_info
-                                   group by dim
-                             ) t2
-                             on t1.dim = t2.dim
-                       ) t3
-                 ) t4
+                       ) t2
+                 ) t3
                  group by regexp_extract(dim, '^(.*)_[^_]+$', 1),element   -- 用户分类、ele
-           ) t5
-     ) t6
+           ) t4
+     ) t5
 )
 
 
@@ -209,9 +202,9 @@ from (
             m2_surprise,
             m2_ep,
             -- ep&s
-            ep,
             surprise,
             surprise_rank,
+            ep,
             ep_sum,
             lag_ep_sum,
             surprise_sum,
@@ -241,9 +234,9 @@ from (
                   m2_surprise,
                   m2_ep,
                   -- ep&s
-                  ep,
                   surprise,
                   surprise_rank,
+                  ep,
                   ep_sum,
                   lag_ep_sum,
                   -- 5. 在每个维度下汇总各元素的S值，得到各维度S值的汇总结果。
@@ -272,9 +265,9 @@ from (
                         m2_surprise,
                         m2_ep,
                         -- ep&s
-                        ep,
                         surprise,
                         surprise_rank,
+                        ep,
                         ep_sum,
                         -- 取当前行的上一行（1）的 ep_sum 值；如果没有上一行（例如是第一行），就使用默认值 ep_sum（即当前行的值）
                         lag(ep_sum,1,ep_sum) over (partition by dim order by surprise_rank asc) as lag_ep_sum
@@ -302,9 +295,9 @@ from (
                               m2_surprise,
                               m2_ep,
                               -- ep&s
-                              ep,
                               surprise,
                               surprise_rank,
+                              ep,
                               -- 3. 筛选完单个元素EP值之后，在对每个维度下通过筛选的元素EP值进行累加
                               -- 这里额外也添加了一个绝对值
                               -- 这里用绝对值累加，是想统计所有元素贡献度的大小和，忽略正负方向:这样设计是对的，因为你想选出贡献总量达到阈值的元素集。
@@ -333,10 +326,10 @@ from (
                                    m2_surprise,
                                    m2_ep,
                                    -- ep&s
-                                   m1_m2_ep_normalization as ep,
-                                   m1_m2_surprise         as surprise,
+                                   surprise,
+                                   ep,
                                    -- 1. 在每个维度内将元素按照惊讶度S从高到低对数据进行排序
-                                   row_number() over (partition by dim order by m1_m2_surprise desc) as surprise_rank
+                                   row_number() over (partition by dim order by surprise desc) as surprise_rank
                               from m1_and_m2
                         ) t1
                         -- 2. 根据设定的单个元素EP阈值，遍历所有元素的EP值是否高于0.2，如果高于，则通过筛选
