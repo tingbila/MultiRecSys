@@ -341,7 +341,10 @@ from (
             -- 0.5  0.5
             -- 0.9  0.5
             -- 2025年8月2日21:36:34 :临时加了一个 (t3.ep_sum > 0.8 and t3.lag_ep_sum = 1)条件
-            where t3.ep_sum <= 0.8 or (t3.ep_sum > 0.8 and t3.lag_ep_sum < 0.8) or (t3.ep_sum > 0.8 and t3.lag_ep_sum = 1)
+            -- 2025年8月3日08:14:20 :临时增加了一个t6.ep_sum >= 1.0
+            -- before	after	pre_sum	aft_sum    ep
+            -- 	86	    72	    88	    75         1.076923076923  发现贡献度有大于1的情况
+            where t3.ep_sum <= 0.8 or (t3.ep_sum > 0.8 and t3.lag_ep_sum < 0.8) or (t3.ep_sum > 0.8 and t3.lag_ep_sum = 1)  or t3.ep_sum >= 1.0
       ) t4
 ) t5
 -- 6. 假设我们最终的目标是筛选影响最大的top2的维度进行原因定位
