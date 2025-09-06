@@ -11,6 +11,7 @@ from datasets.data_loader import load_dataset
 from trainers.trainer import train_and_evaluate
 import tensorflow as tf
 from datasets.utils_tf import create_dataset
+import numpy as np
 from config.data_config import *
 from models.Fm import Fm
 from models.FM_Embedding import FM_MTL
@@ -61,7 +62,7 @@ def get_model(model_name, feat_columns, embed_dim=None, batch_size=None):
 
 if __name__ == "__main__":
     # 1. 加载数据集 （小数据集是用逗号分割单 ，大数据集是用\t分割的）
-    data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_2_with_history.csv", embed_dim=embed_dim)
+    data, train_ds, valid_ds,test_ds, feat_columns  = create_dataset(file_path="data_files/train_1.csv", embed_dim=embed_dim)
     print(data.head(5))
     """
        uid  user_city  item_id  author_id  item_city  channel  finish  like  music_id  device      time  duration_time  actors   genres        history_item_ids         history_citys
@@ -103,8 +104,70 @@ if __name__ == "__main__":
 
 
     # 2. 调用模型
-    model_name = "MMOE_NLP_Attention"
+    model_name = "Fm"
     model = get_model(model_name, feat_columns)
 
     # 3. 训练并评估
     train_and_evaluate(model, train_ds, valid_ds,test_ds)
+
+    # # 模型训练评估完之后输出top-N交叉特征-进行数据挖掘-2025年9月6日18:49:58新增内容
+    # V_matrix = model.V.numpy()  # shape: (num_features, emb_size)
+    # print(V_matrix)
+    # # [[-0.02703715  0.01528769 -0.01400328]
+    # #  [ 0.01407009 -0.03462351 -0.0223598 ]
+    # #  [-0.03217772 -0.06346221 -0.03414213]
+    # #  [-0.0573472  -0.10437017 -0.00375469]
+    # #  [ 0.01148079  0.02796272  0.01585371]]
+    #
+    # # 计算交叉权重矩阵
+    # cross_weights = np.dot(V_matrix, V_matrix.T)  # shape: (num_features, num_features)
+    # print(cross_weights)
+    # print(cross_weights.shape)
+    # # [[ 0.01674403  0.0044216   0.00503649 -0.0061559  -0.00661108]
+    # #  [ 0.0044216   0.00236985  0.00069299 -0.0032963  -0.00326076]
+    # #  [ 0.00503649  0.00069299  0.00269178 -0.00184033 -0.00034924]
+    # #  [-0.0061559  -0.0032963  -0.00184033  0.00549482  0.00366477]
+    # #  [-0.00661108 -0.00326076 -0.00034924  0.00366477  0.00535326]]
+    # # (5, 5)
+    #
+    # # cross_weights 是对称矩阵，V_matrix 是 (num_features, emb_size)
+    # num_features = cross_weights.shape[0]  # 5
+    # # num_features和column_names的数量是一致的！！
+    # column_names =  ["uid", "user_city", "item_id", "author_id", "item_city", "channel","music_id", "device","time", "duration_time"]
+    #
+    # # 保存所有特征对及其交互值（只保留上三角非对角）
+    # interactions = []
+    # for i in range(num_features):
+    #     for j in range(i + 1, num_features):
+    #         interactions.append(((i, j), cross_weights[i, j]))
+    # print(interactions)
+    # # [((0, 1), -0.0007552213), ((0, 2), 0.00019944718), ((0, 3), -0.00080472825), ((0, 4), 0.002731351),
+    # #  ((1, 2), -0.00057267095), ((1, 3), 0.0028101264), ((1, 4), -0.0008638674), ((2, 3), 0.0018121665),
+    # #  ((2, 4), -0.0049506244), ((3, 4), -0.007953306)]
+    #
+    # # 按绝对值排序（从大到小）输出 Top_k 特征交互对
+    # print("特征交互对（按交互强度）:")
+    # top_k_interact = 5
+    # top_k_list = sorted(interactions, key=lambda x: abs(x[1]), reverse=True)[:top_k_interact]
+    # print(top_k_list)
+    # # [((3, 4), -0.007953306), ((2, 4), -0.0049506244), ((1, 3), 0.0028101264), ((0, 4), 0.002731351), ((2, 3), 0.0018121665)]
+    # # 输出-具体名称-特征交互对
+    #
+    # for (i, j), weight in top_k_list:
+    #     name_i = column_names[i]
+    #     name_j = column_names[j]
+    #     print(f"{i, j}  {name_i} × {name_j} : 权重 = {weight:.6f}")
+
+    # (3, 4)  country × region : 权重 = -0.007953
+    # (2, 4)  app_version × region : 权重 = -0.004951
+    # (1, 3)  app_name × country : 权重 = 0.002810
+    # (0, 4)  platform × region : 权重 = 0.002731
+    # (2, 3)  app_version × country : 权重 = 0.001812
+
+    # 特征交互对（按交互强度）:
+    # [((8, 9), 0.025189731), ((5, 8), -0.02390424), ((5, 9), 0.018998701), ((5, 6), -0.014220717), ((1, 9), 0.01261252)]
+    # (8, 9)  time × duration_time : 权重 = 0.025190
+    # (5, 8)  channel × time : 权重 = -0.023904
+    # (5, 9)  channel × duration_time : 权重 = 0.018999
+    # (5, 6)  channel × music_id : 权重 = -0.014221
+    # (1, 9)  user_city × duration_time : 权重 = 0.012613

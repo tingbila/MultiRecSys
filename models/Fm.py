@@ -28,13 +28,23 @@ class Fm (Model):
         self.linear_dense = layers.Dense(1)
 
         self.V = self.add_weight(
+            name="fm_embeddings",  # ⭐️ 加一个明确的名字
             shape=(len(self.dense_feats) + len(self.sparse_feats), self.emb_size),
             initializer="random_normal",
             trainable=True
         )
 
-        # print(self.V)
-        # print(self.V.shape)  # (234, 5)
+        print(self.V)
+        print(self.V.shape)  # (5, 3)
+        # < tf.Variable'Variable:0'
+        # shape = (5, 3)
+        # dtype = float32, numpy =
+        # array([[0.02899534, -0.04050206, 0.03443773],
+        #        [-0.01291281, -0.06589996, -0.0117657],
+        #        [-0.0475354, -0.01391905, -0.00871712],
+        #        [-0.0351649, 0.00506363, -0.00288101],
+        #        [-0.11686293, 0.08292484, -0.0692029]], dtype=float32) >
+        # (5, 3)
 
         # 每个任务一个输出层
         self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
@@ -63,6 +73,11 @@ class Fm (Model):
 
         # 第一部分：线性部分(离散变量和连续都要走线性模型)
         linear_out = self.linear_dense(X)
+        # print('linear_out',linear_out)
+        # tf.Tensor(
+        #     [[-2.4728346]
+        #      [-3.7007458]
+        #      [-2.7860653]], shape=(3, 1), dtype=float32)
 
         # 第二部分：FM交互项部分（下面的这是效率低的写法）
         # fm_out = 0
@@ -78,7 +93,11 @@ class Fm (Model):
         xv_square         = tf.square(tf.matmul(X, self.V))
         x_square_v_square = tf.matmul(tf.square(X), tf.square(self.V))
         fm_out = 0.5 * tf.reduce_sum(xv_square - x_square_v_square, axis=1, keepdims=True)
-
+        # print('fm_out',fm_out)
+        # tf.Tensor(
+        #     [[0.04543651]
+        #      [0.06157517]
+        #      [0.05966767]], shape=(3, 1), dtype=float32)
 
         logits = linear_out + fm_out
 
@@ -108,18 +127,11 @@ if __name__ == '__main__':
     batch_size = 3
     dense_input = tf.random.uniform(shape=(batch_size, len(dense_feats)), dtype=tf.float32)
     sparse_input = tf.random.uniform(shape=(batch_size, len(sparse_feats)), maxval=6, dtype=tf.int32)
-
-    # 前向传播
-    output = model((sparse_input, dense_input), training=False)
-
     # 打印结果
     print("Dense 输入:")
     print(dense_input.numpy())
     print("Sparse 输入:")
     print(sparse_input.numpy())
-    print("\n模型输出:")
-    print(output)
-
 
     # Dense 输入:
     # [[0.19882536 0.9919691 ]
@@ -129,7 +141,13 @@ if __name__ == '__main__':
     # [[1 3 3]
     #  [4 4 0]
     #  [1 3 2]]
-    #
+
+    # 前向传播
+    output = model((sparse_input, dense_input), training=False)
+
+    print("\n模型输出:")
+    print(output)
+
     # 模型输出:
     # (<tf.Tensor: shape=(3, 1), dtype=float32, numpy=
     # array([[0.47370112],
@@ -138,3 +156,58 @@ if __name__ == '__main__':
     # array([[0.43123466],
     #        [0.4493978 ],
     #        [0.4693598 ]], dtype=float32)>)
+
+
+    # 模型训练评估完之后输出top-N交叉特征-进行数据挖掘-2025年9月6日18:49:58新增内容
+    V_matrix = model.V.numpy()  # shape: (num_features, emb_size)
+    print(V_matrix)
+    # [[-0.02703715  0.01528769 -0.01400328]
+    #  [ 0.01407009 -0.03462351 -0.0223598 ]
+    #  [-0.03217772 -0.06346221 -0.03414213]
+    #  [-0.0573472  -0.10437017 -0.00375469]
+    #  [ 0.01148079  0.02796272  0.01585371]]
+
+    # 计算交叉权重矩阵
+    cross_weights = np.dot(V_matrix, V_matrix.T)  # shape: (num_features, num_features)
+    print(cross_weights)
+    print(cross_weights.shape)
+    # [[ 0.01674403  0.0044216   0.00503649 -0.0061559  -0.00661108]
+    #  [ 0.0044216   0.00236985  0.00069299 -0.0032963  -0.00326076]
+    #  [ 0.00503649  0.00069299  0.00269178 -0.00184033 -0.00034924]
+    #  [-0.0061559  -0.0032963  -0.00184033  0.00549482  0.00366477]
+    #  [-0.00661108 -0.00326076 -0.00034924  0.00366477  0.00535326]]
+    # (5, 5)
+
+    # cross_weights 是对称矩阵，V_matrix 是 (num_features, emb_size)
+    num_features = cross_weights.shape[0]  # 5
+    # num_features和column_names的数量是一致的！！
+    column_names = ["platform", "app_name", "app_version", "country", "region"]
+
+    # 保存所有特征对及其交互值（只保留上三角非对角）
+    interactions = []
+    for i in range(num_features):
+        for j in range(i + 1, num_features):
+            interactions.append(((i, j), cross_weights[i, j]))
+    print(interactions)
+    # [((0, 1), -0.0007552213), ((0, 2), 0.00019944718), ((0, 3), -0.00080472825), ((0, 4), 0.002731351),
+    #  ((1, 2), -0.00057267095), ((1, 3), 0.0028101264), ((1, 4), -0.0008638674), ((2, 3), 0.0018121665),
+    #  ((2, 4), -0.0049506244), ((3, 4), -0.007953306)]
+
+    # 按绝对值排序（从大到小）输出 Top_k 特征交互对
+    print("特征交互对（按交互强度）:")
+    top_k_interact = 5
+    top_k_list = sorted(interactions, key=lambda x: abs(x[1]), reverse=True)[:top_k_interact]
+    print(top_k_list)
+    # [((3, 4), -0.007953306), ((2, 4), -0.0049506244), ((1, 3), 0.0028101264), ((0, 4), 0.002731351), ((2, 3), 0.0018121665)]
+    # 输出-具体名称-特征交互对
+
+    for (i, j), weight in top_k_list:
+        name_i = column_names[i]
+        name_j = column_names[j]
+        print(f"{i, j}  {name_i} × {name_j} : 权重 = {weight:.6f}")
+
+    # (3, 4)  country × region : 权重 = -0.007953
+    # (2, 4)  app_version × region : 权重 = -0.004951
+    # (1, 3)  app_name × country : 权重 = 0.002810
+    # (0, 4)  platform × region : 权重 = 0.002731
+    # (2, 3)  app_version × country : 权重 = 0.001812
