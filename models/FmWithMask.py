@@ -3,6 +3,14 @@
 # @Time  : 2018.
 # @Author : 张明阳
 # @Email : mingyang.zhang@ushow.media
+"""
+Mask 的作用:
+mask 是 [num_features, num_features] 的 0-1 矩阵
+用来控制哪些特征对的交互可以计算
+支持：
+上三角（i < j）
+屏蔽特定组合（如业务不关注的交互）
+"""
 
 
 # models/DeepFm.py
@@ -16,7 +24,15 @@ import torch
 
 
 class FmWithMask (Model):
-    def __init__(self, feat_columns, emb_size=5):
+    def __init__(self, feat_columns, emb_size=5, mask_matrix=None):
+        """
+        :param feat_columns:
+        :param emb_size:
+        :param mask_matrix:新增一个 Mask 矩阵参数 ，表示允许的交互。
+        M∈{0,1}n×n
+        M∈{0,1}
+        n×n
+        """
         super().__init__()
         # feat_columns = [
         #     [{'feat': 'I1'}, {'feat': 'I2'}],
@@ -45,6 +61,14 @@ class FmWithMask (Model):
         #        [-0.0351649, 0.00506363, -0.00288101],
         #        [-0.11686293, 0.08292484, -0.0692029]], dtype=float32) >
         # (5, 3)
+
+        # 将输入的 Mask 矩阵转换成 TensorFlow 常量张量，用于在模型的计算中控制特征交互，并且保证它不参与训练。
+        # if mask_matrix is None:
+        #     n_feats = len(self.dense_feats) + len(self.sparse_feats)
+        #     mask_matrix = np.ones((n_feats, n_feats), dtype=np.float32)
+        # tf.constant 创建的是 常量张量，它的值 固定不变，在训练过程中不会被优化器更新，也不会计算梯度。
+        self.mask = tf.constant(mask_matrix, dtype=tf.float32)
+        print("self.mask",self.mask)
 
         # 每个任务一个输出层
         self.finish_output_layer = tf.keras.layers.Dense(1, activation='sigmoid', name='finish')
@@ -80,19 +104,26 @@ class FmWithMask (Model):
         #      [-2.7860653]], shape=(3, 1), dtype=float32)
 
         # 第二部分：FM交互项部分（下面的这是效率低的写法）
-        # fm_out = 0
-        # n = X.shape[1]  # 统计有几列
-        # for i in range(n):
-        #     for j in range(i + 1, n):
-        #         # print(i,j)
-        #         fm_out += tf.tensordot(self.V[i], self.V[j], axes=1) * X[:, i] * X[:, j]
+        """
+        tf.tensordot(self.V[i], self.V[j], axes=1) → 计算 embedding 内积 <v_i, v_j> → 标量
+        X[:, i] * X[:, j] → 样本对应的特征乘积 → 向量
+        fm_out += ... → 累加所有特征对的二阶交互 → 向量 -> [batch_size, 1]
+        """
+        fm_out = 0
+        n = X.shape[1]  # 统计有几列
+        for i in range(n):
+            for j in range(i + 1, n):
+                if self.mask[i, j] == 1:  # 只计算 mask=1 的交互
+                    print(i,j)
+                    fm_out += tf.tensordot(self.V[i], self.V[j], axes=1) * X[:, i] * X[:, j]
+        print("fm_out",fm_out)
 
 
         # 第二部分：FM交互项部分（下面的这是公式优化写法）
         # a*b = [(a+b)^2 - (a^2+b^2)]/2
-        xv_square         = tf.square(tf.matmul(X, self.V))
-        x_square_v_square = tf.matmul(tf.square(X), tf.square(self.V))
-        fm_out = 0.5 * tf.reduce_sum(xv_square - x_square_v_square, axis=1, keepdims=True)
+        # xv_square         = tf.square(tf.matmul(X, self.V))
+        # x_square_v_square = tf.matmul(tf.square(X), tf.square(self.V))
+        # fm_out = 0.5 * tf.reduce_sum(xv_square - x_square_v_square, axis=1, keepdims=True)
         # print('fm_out',fm_out)
         # tf.Tensor(
         #     [[0.04543651]
@@ -120,8 +151,31 @@ if __name__ == '__main__':
         [{'feat': 'C1', 'feat_num': 10}, {'feat': 'C2', 'feat_num': 8}, {'feat': 'C3', 'feat_num': 6}]
     ]
 
+    # FM 的交互项只需要 上三角 (i < j)，下三角 (j < i) 是重复的，可以直接置 0。
+    """
+    这是你传入的 Mask 矩阵，形状为 [n_features, n_features]。
+    内容是 0 或 1：
+    1 → 允许计算该特征对交互
+    0 → 屏蔽该交互
+    """
+    n_feats = len(dense_feats) + len(sparse_feats)
+    mask = np.ones((n_feats, n_feats), dtype=np.float32)
+    np.fill_diagonal(mask, 0)  # 去掉对角线
+    mask = np.triu(mask, 1)    # 只保留上三角（i < j），下三角全置 0
+
+    # 屏蔽额外交互-这个部分需要业务方自己定义！！
+    mask[0, 4] = 0
+    mask[1, 3] = 0
+    print(mask)
+    # [[0. 1. 1. 1. 0.]
+    #  [0. 0. 1. 0. 1.]
+    #  [0. 0. 0. 1. 1.]
+    #  [0. 0. 0. 0. 1.]
+    #  [0. 0. 0. 0. 0.]]
+
+
     # 初始化模型
-    model = FmWithMask(feat_columns=feat_columns, emb_size=3)
+    model = FmWithMask(feat_columns=feat_columns, emb_size=3,mask_matrix=mask)
 
     # 模拟 batch size 为 3 的输入
     batch_size = 3
@@ -187,7 +241,8 @@ if __name__ == '__main__':
     interactions = []
     for i in range(num_features):
         for j in range(i + 1, num_features):
-            interactions.append(((i, j), cross_weights[i, j]))
+            if mask[i, j] == 1:  # 只计算 mask=1 的交互权重：只保留训练时允许的交互组合
+                interactions.append(((i, j), cross_weights[i, j]))
     print(interactions)
     # [((0, 1), -0.0007552213), ((0, 2), 0.00019944718), ((0, 3), -0.00080472825), ((0, 4), 0.002731351),
     #  ((1, 2), -0.00057267095), ((1, 3), 0.0028101264), ((1, 4), -0.0008638674), ((2, 3), 0.0018121665),
