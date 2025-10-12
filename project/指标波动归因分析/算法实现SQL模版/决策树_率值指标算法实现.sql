@@ -37,7 +37,7 @@ m1_and_m2 as (
            ROUND(m1_m2_ep / ROUND(sum(m1_m2_ep) over (partition by dim),12),12) as ep,  -- 分子分母的联合贡献度（归一化的结果）
            rate_before,
            rate_after,
-           abs_x,
+           abs_x
      from (
            SELECT
                  -- 维度：Aij代表after、 Fij代表before
