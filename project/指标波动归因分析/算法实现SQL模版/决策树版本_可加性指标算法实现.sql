@@ -127,7 +127,7 @@ from (
                                     t4.G_fenzi_element,
                                     t4.G_fenmu,
                                     --8. 计算基尼系数的分子
-                                    sum(t4.G_fenzi_element) over(partition by t4.dim_n) as G_fenzi,
+                                    sum(t4.G_fenzi_element) over(partition by t4.dim) as G_fenzi,
                                     t4.ep
                               from (
                                     select

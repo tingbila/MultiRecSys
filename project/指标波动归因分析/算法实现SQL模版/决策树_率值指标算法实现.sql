@@ -139,7 +139,7 @@ select
       m2_pre_sum,
       m2_aft_sum,
       m2_ep,
-      -- 复用部分
+      -- 这里的ep放到了后面的位置
       m1_m2_ep,
       rate_before,
       rate_after,
@@ -216,7 +216,7 @@ from (
                   G,
                   G_rank,
                   ep_rank,
-                  -- 15. 基于12筛选完单个元素EP值之后，在对每个维度下通过筛选的元素EP值进行累加
+                  -- 15. 筛选完单个元素EP值之后，在对每个维度下通过筛选的元素EP值进行累加
                   -- 这里额外也添加了一个绝对值
                   -- 这里用绝对值累加，是想统计所有元素贡献度的大小和，忽略正负方向:这样设计是对的，因为你想选出贡献总量达到阈值的元素集。
                   sum(abs(ep)) over (partition by dim order by ep_rank asc rows between unbounded preceding and current row ) as ep_sum
@@ -306,7 +306,7 @@ from (
                                     G_fenzi_element,
                                     G_fenmu,
                                     --10. 计算基尼系数的分子
-                                    sum(t4.G_fenzi_element) over(partition by t4.dim_n) as G_fenzi
+                                    sum(t4.G_fenzi_element) over(partition by t4.dim) as G_fenzi
                               from (
                                     select
                                           dim,
