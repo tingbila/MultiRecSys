@@ -93,7 +93,7 @@ from (
                         G_rank,
                         ep,
                         -- 12. 维度内对ep降序排序
-                        row_numbwe() over (partition by dim order by abs(ep) desc) as ep_rank
+                        row_number() over (partition by dim order by abs(ep) desc) as ep_rank
                   from (
                         select
                               dim,
@@ -143,7 +143,7 @@ from (
                                           -- 5. 计算每项系数和绝对值相乘 (2i-n-1)xi
                                           (2 * t3.abs_x_rank - t3.dim_n - 1) * t3.abs_x as G_fenzi_element,
                                           -- 6. 计算基尼系数的分母
-                                          t3.dim_n * (sum(t3.abs_x) over (partition by t2.dim))  as G_fenmu,
+                                          t3.dim_n * (sum(t3.abs_x) over (partition by t3.dim))  as G_fenmu,
                                           -- 7. 计算贡献率EP:即每个元素波动对于总体波动的贡献，以A渠道为例，A渠道的EP=（A渠道活动后销售额-A渠道活动前销售额）/（总体活动后销售额-总体活动前销售额）。
                                           --  如果不取绝对值，结果的含义:
                                           --      EP 可能为正或负，且整体指标变动可能为正或负
