@@ -111,7 +111,7 @@ from (
                               -- 9. 计算维度级别的基尼系数
                               G_fenzi / G_fenmu as G,
                               -- 10. 按照计算好的各维度的基尼系数从大到小对dim进行降序排序
-                              row_number() over(order by G_fenzi / G_fenmu desc) as G_rank,
+                              dense_rank() over(order by G_fenzi / G_fenmu desc) as G_rank,
                               ep
                         from (
                               select
