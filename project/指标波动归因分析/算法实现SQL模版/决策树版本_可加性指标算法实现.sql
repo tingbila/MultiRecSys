@@ -20,18 +20,18 @@ select
       after,
       pre_sum,
       aft_sum,
-      abs_x,
-      abs_x_rank,
-      dim_n,
-      G_fenzi_element,
-      G_fenmu,
-      G_fenzi,
-      G,
-      G_rank,
-      ep,
-      ep_rank,
-      ep_sum,
-      lag_ep_sum
+      abs_x,               -- 每个element的绝对值变化量
+      abs_x_rank,          -- 维度内对abs_x进行升序
+      dim_n,               -- 统计维度内元素个数
+      G_fenzi_element,     -- 计算每项系数和绝对值相乘 (2i-n-1)xi
+      G_fenmu,             -- 计算基尼系数的分母
+      G_fenzi,             -- 基尼系数的分子
+      G,                   -- 维度级别的基尼系数
+      G_rank,              -- 全局基尼系数从大到小对dim进行降序排序
+      ep,                  -- 每个元素波动对于总体波动的贡献
+      ep_rank,             -- 维度内对ep降序排序
+      ep_sum,              -- 绝对值累加：从第一行到当前行
+      lag_ep_sum           -- 取当前行的上一行（1）的 ep_sum 值
 from (
       select
             dim,
